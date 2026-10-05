@@ -1,511 +1,167 @@
-# CivicVoice 🏛️
+# CivicVoice — Location-Based Civic Issue Dispatch & Resolution Platform
 
-## Citizen Civic Issue Reporting & Resolution Tracking Platform
+> **A community-driven digital civic platform connecting citizen dispatches directly to municipal public works with transparent, before-and-after photo verification.**
 
-CivicVoice is a web-based civic engagement platform that enables citizens to **report real-world civic problems, discover issues in their surroundings, support existing reports, and track how those problems are addressed and resolved**.
-
-The platform aims to improve communication, transparency, and community participation around everyday civic issues such as potholes, damaged roads, garbage accumulation, broken streetlights, drainage problems, water-related issues, and other public infrastructure problems.
-
-CivicVoice is designed as an **educational and civic participation platform**. It does not represent a government authority and does not replace official government complaint or grievance systems.
-
----
-
-## 🎯 Problem Statement
-
-Citizens encounter civic problems regularly, but information about these problems is often fragmented.
-
-A citizen may notice a pothole, overflowing garbage, damaged streetlight, or drainage problem, but there may be no convenient way to:
-
-* Report the issue in a structured manner
-* Provide accurate location information
-* Share photographic evidence
-* Discover whether someone has already reported the same problem
-* Show how many other citizens are affected
-* Track what happens after reporting
-* Know whether action has actually been taken
-* Verify whether a supposedly resolved problem has really been fixed
-
-CivicVoice aims to provide a centralized platform where civic issues can be **reported, discovered, supported, tracked, and documented until resolution**.
+[![React 19](https://img.shields.io/badge/React-19-blue.svg)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Vite-8.3-646CFF.svg)](https://vitejs.dev/)
+[![Tailwind CSS v4](https://img.shields.io/badge/TailwindCSS-v4-38BDF8.svg)](https://tailwindcss.com/)
+[![Web Audio API](https://img.shields.io/badge/Audio-Synthesized-FFDD00.svg)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
+[![Status](https://img.shields.io/badge/Civic%20Lifecycle-7--Stage-10B981.svg)]()
 
 ---
 
-## 💡 Proposed Solution
+## 🏛️ Project Overview
 
-CivicVoice introduces a structured lifecycle for civic issues:
+Citizens regularly encounter civic problems such as hazardous potholes, damaged road asphalt, overflowing garbage dumpsters, broken streetlamps causing blackout zones, clogged storm drains, and compromised park infrastructure.
 
-Citizen identifies a problem
-          ↓
-Reports the issue
-          ↓
-Adds location, category, description & evidence
-          ↓
-Other citizens discover the issue
-          ↓
-Citizens support the issue
-          ↓
-Issue gains visibility / priority
-          ↓
-Authority / Administrator reviews it
-          ↓
-Issue is accepted and work begins
-          ↓
-Progress updates are published
-          ↓
-Completion evidence is uploaded
-          ↓
-Citizen verification
-          ↓
-Issue marked as resolved
-
-
-If the problem has not actually been resolved, the issue can potentially be **reopened**, creating a more accountable resolution history.
+**CivicVoice** provides an intuitive, location-based reporting and resolution tracking web platform that eliminates bureaucratic black holes. Instead of filing reports into forgotten municipal inboxes, citizens dispatch geolocated reports with photographic proof, neighbors can co-sign existing issues to prevent duplicates, and city crews must upload verified completion evidence before citizens certify the fix.
 
 ---
 
-# ✨ Core Features
+## 🎭 Design Inspirations & Interactive Philosophy
 
-## 👤 Citizen Features
+CivicVoice moves away from generic, templated web UI by synthesizing high-craft editorial design and tactile physical metaphors:
 
-Citizens will be able to:
-
-* Register and log in
-* Create civic issue reports
-* Add issue title and description
-* Select an issue category
-* Add location information
-* Upload photographic evidence
-* View nearby reported issues
-* Search civic issues
-* Filter issues by location
-* Filter issues by category
-* Filter issues by status
-* Support existing issues
-* Track issue progress
-* View authority/admin updates
-* View completed issues
-* Verify resolved issues
-* Report inappropriate or incorrect content
-* Manage their profile
+1. **Anti-Slop Craft ([Leonxlnx/taste-skill](https://github.com/Leonxlnx/taste-skill))**:
+   - Zero generic AI purple glows or repetitive cards.
+   - Purposeful layout variance, high-contrast typography, and tactile physical feedback.
+2. **NY Phil Gustavo Staging ([nyphil.org/discover/gustavo](https://www.nyphil.org/discover/gustavo))**:
+   - Monumental, condensed display typography (`Bebas Neue` & `Anton` with tight `0.85` line-height).
+   - High-voltage theatrical contrast: Pure Stage Black (`#050505`), Electric Cadmium Yellow (`#FFDD00`), and pure white.
+   - Kinetic marquee tickers and acoustic ambient audio visualizer bars.
+3. **Physical Postal & Downward Mail Chute Experience ([General Admission](https://generaladmission.house/))**:
+   - Interactive 3D Red Pillar Mailbox with responsive brass slot flap.
+   - Floating dispatches that swoop, rotate, and physically slide **down inside the mail slot** with mechanical clank and paper whoosh audio.
+   - Downward gravity mail chute with optical laser OCR scanning chamber.
+   - Underground municipal sorting vault organized by department cubbies.
 
 ---
 
-## 📍 Location-Based Civic Issues
+## 🔄 The 7-Stage Issue Lifecycle
 
-Location is a central component of CivicVoice.
+CivicVoice implements a formal, transparent state machine for every reported problem:
 
-Each issue can contain location information so users can discover problems relevant to their surroundings.
+```mermaid
+stateDiagram-v2
+    [*] --> Reported: Citizen dispatches report with GPS & photo
+    Reported --> Under_Review: Ward dispatcher inspects severity & GIS
+    Under_Review --> Accepted: Work order issued to specialized squad
+    Accepted --> In_Progress: Heavy roller / repair crew dispatched to street
+    In_Progress --> Completed: Municipal authority uploads Before/After proof
+    Completed --> Citizen_Verified: Residents inspect in person & certify fix
+    Completed --> Reopened: Issue persists -> Reopened for crew dispatch
+    Reopened --> In_Progress: Crew re-assigned
+    Citizen_Verified --> [*]: Closed
+```
 
-Examples:
-
-* Pothole near a road
-* Broken streetlight
-* Garbage accumulation
-* Damaged public infrastructure
-* Drainage blockage
-* Water leakage
-* Road damage
-
-Users should be able to explore issues based on their location and search for issues in a particular area.
-
----
-
-# 🔄 Issue Lifecycle
-
-An issue can progress through different stages.
-
-
-Reported
-   ↓
-Under Review
-   ↓
-Accepted
-   ↓
-In Progress
-   ↓
-Completed
-   ↓
-Citizen Verified
-
-
-An issue may also be reopened when the reported problem still exists after being marked as completed.
-
-
-Completed
-    ↓
-Citizen Verification
-    ↓
-Problem Still Exists
-    ↓
-Reopened
-
-
-The exact workflow and status model will be finalized during the requirements and system-design phases.
+### The 6 Symphonic Movements:
+- **Movement I: Allegro (Reported)** — The initial civic dispatch strikes.
+- **Movement II: Andante (Under Review)** — Municipal desk triages GIS severity.
+- **Movement III: Moderato (Accepted)** — Work order routed to department.
+- **Movement IV: Crescendo (In Progress)** — Repair squads in rhythm on the street.
+- **Movement V: Forte (Completed)** — Repairs completed with photographic evidence.
+- **Movement VI: Harmonico (Citizen Verified)** — Community audits and certifies resolution.
 
 ---
 
-# 🏛️ Authority / Admin Features
+## 🎨 5 Atmospheric Background Themes
 
-Authorized administrators will be able to:
+Switchable dynamically from the top-right header dock:
 
-* View reported issues
-* Review issue reports
-* Filter and search issues
-* Review evidence
-* View issue locations
-* Update issue status
-* Manage issue categories
-* Post progress updates
-* Upload completion evidence
-* Monitor unresolved issues
-* Manage inappropriate reports
-* View civic issue analytics
-
-The project will distinguish between **citizen users and privileged administrative users** through role-based authorization.
+| Theme | Description | Accent |
+|---|---|---|
+| ⚡ **NY Phil Gustavo Stage** | Signature stage black, cadmium yellow & electric brutalist borders | `#FFDD00` |
+| 🟡 **Studio Post Yellow** | Warm 3D postal studio lighting with soft ground drop shadows | `#F6C438` |
+| 📮 **Lincoln Center Scarlet** | Theatrical velvet red & gold brass heraldry | `#991B1B` |
+| 🎼 **Score Parchment** | Engraved music manuscript stationery with airmail borders | `#2563EB` |
+| 🌃 **Manhattan Midnight** | Urban night stage with electric cyan neon accents | `#02C0FF` |
 
 ---
 
-# 📊 Transparency & Accountability
+## 🛠️ Tech Stack & Zero-Cost Architecture
 
-A major goal of CivicVoice is to make the **history of a civic issue visible**.
-
-Instead of an issue simply disappearing after being marked as completed, users should be able to see information such as:
-
-Problem Reported
-       ↓
-Review
-       ↓
-Accepted
-       ↓
-Work Started
-       ↓
-Progress Updates
-       ↓
-Completion Evidence
-       ↓
-Citizen Verification
-
-
-This creates a record of how the issue progressed from reporting to resolution.
+- **Frontend**: React 19, Vite 8, Tailwind CSS v4, Lucide React
+- **Audio Engine**: Custom synthesized Web Audio API (zero external sound asset lag; crisp paper whooshes, mechanical slot clanks, timpani drum hits, and harmonic C-Major chords)
+- **Physics & Motion**: CSS 3D Transforms, Canvas Confetti, kinetic marquee scroller
+- **Mapping**: GIS Ward Radar with spatial incident coordinate plotting
+- **Role Modes**: Seamlessly toggle between **Citizen Mode** and **Municipal Officer Mode**
 
 ---
 
-# 🗂️ Initial Issue Categories
+## 📂 Repository Structure
 
-The platform may initially support categories such as:
-
-* Roads & Potholes
-* Garbage & Sanitation
-* Streetlights
-* Water Supply
-* Drainage
-* Public Infrastructure
-* Traffic
-* Environment
-* Public Safety
-* Electricity
-* Parks & Public Spaces
-* Other Civic Issues
-
-The final categories will be determined during the requirements phase.
-
----
-
-# 🔎 Search & Discovery
-
-Users should be able to discover relevant civic issues using:
-
-* Location
-* Category
-* Status
-* Keywords
-* Issue priority
-* Recent reports
-* Supported issues
-
-Future improvements may include more advanced location-aware and semantic search.
-
----
-
-# 🏆 Community Participation
-
-CivicVoice allows citizens to support issues that affect them.
-
-For example:
-
-Pothole reported
-       ↓
-1 citizen reports it
-       ↓
-25 citizens support it
-       ↓
-Issue gains greater community visibility
-
-
-This allows the platform to represent **community interest in reported problems**, rather than creating a separate duplicate report for every affected citizen.
-
-The exact prioritization algorithm will be designed later.
+```text
+Civic Voice/
+├── public/
+│   └── assets/
+│       ├── envelope-airmail.png     # 3D Vintage Airmail Envelope Artifact
+│       ├── postbox-pillar.png       # 3D Red Pillar Mailbox Artifact
+│       └── parcel-box.png           # 3D Shipping Parcel Artifact
+├── src/
+│   ├── components/
+│   │   ├── Navbar.jsx               # Header with brand mark, view tabs, officer toggle
+│   │   ├── GustavoHero.jsx          # Monumental condensed hero with unfolding letter
+│   │   ├── MailboxStage.jsx         # 3D Postbox drop zone with mechanical slot flap
+│   │   ├── MailChuteScroll.jsx      # Downward gravity transit through laser OCR scanner
+│   │   ├── SortingVault.jsx         # Underground municipal sorting vault with mail cubbies
+│   │   ├── SymphonicMovements.jsx   # 6 Symphonic resolution movements & acoustic cues
+│   │   ├── IssueCard.jsx            # Tactical dispatch cards with co-signing & verification
+│   │   ├── IssueReportModal.jsx     # Multi-step report form + duplicate warning + GPS
+│   │   ├── IssueTimelineModal.jsx   # Detailed 7-step parcel tracking docket & before/after
+│   │   ├── AdminActionModal.jsx     # Municipal officer status advancement console
+│   │   ├── CitizenVerifyModal.jsx   # Citizen inspection certification or reopening
+│   │   ├── InteractiveMapPreview.jsx# Ward GIS radar with clickable incident pins
+│   │   ├── StatsDashboard.jsx       # Public works transparency & resolution velocity
+│   │   └── ThemeSelector.jsx        # Live theme dock with color preview swatches
+│   ├── data/
+│   │   ├── mockIssues.js            # Initial dataset with 7-step lifecycle histories
+│   │   └── themes.js                # Atmospheric theme definitions and CSS variables
+│   ├── utils/
+│   │   └── audio.js                 # Web Audio API procedural sound engine
+│   ├── App.jsx                      # Main application orchestrator
+│   ├── index.css                    # Tailwind v4, monumental typography, keyframes
+│   └── main.jsx                     # Entrypoint
+├── package.json
+└── vite.config.js
+```
 
 ---
 
-# 🤖 Future AI Features
+## 🚀 Getting Started
 
-AI will be an **optional component**.
+### Prerequisites
+- Node.js (v18 or higher)
+- npm or pnpm
 
-The core CivicVoice platform must remain fully functional without AI.
+### Installation
 
-Possible future applications include:
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/RavirajKamejaliya23/CS26013-CivicVoice.git
+   cd CS26013-CivicVoice
+   ```
 
-* Duplicate issue detection
-* Automatic issue categorization
-* Issue description improvement
-* Image-assisted issue classification
-* Summarizing progress updates
-* Natural-language civic issue search
-* Identifying potentially spam or misleading reports
+2. **Install dependencies**:
+   ```bash
+   npm install
+   ```
 
-AI features will only be introduced after the core system is stable.
+3. **Start the development server**:
+   ```bash
+   npm run dev
+   ```
 
----
+4. **Open in browser**:
+   Navigate to `http://localhost:5173/` to experience CivicVoice!
 
-# 🏗️ Planned Technology Stack
-
-The technology stack will be selected based on learning value, maintainability, scalability, and the project's zero-cost development goal.
-
-### Frontend
-
-* React.js
-
-### Backend
-
-* Node.js
-* Express.js
-
-### Database
-
-* PostgreSQL
-
-### Authentication
-
-* JWT-based authentication
-
-### Image Storage
-
-* To be finalized based on the available free/open-source solution
-
-### Version Control
-
-* Git
-* GitHub
-
-### Deployment
-
-* Frontend: To be finalized
-* Backend: To be finalized
-* Database: To be finalized
-
-> Technology choices may be revised during the technology-learning and architecture phases. Any major change will be documented along with its impact on the project.
+5. **Build for production**:
+   ```bash
+   npm run build
+   ```
 
 ---
 
-# 🧩 High-Level Architecture
+## 📜 License & Credits
 
-The planned architecture will follow a client-server model:
-
-
-                    ┌──────────────────┐
-                    │     Citizen      │
-                    └────────┬─────────┘
-                             │
-                             ▼
-                    ┌──────────────────┐
-                    │  React Frontend  │
-                    └────────┬─────────┘
-                             │
-                         HTTP / API
-                             │
-                             ▼
-                    ┌──────────────────┐
-                    │ Node.js +        │
-                    │ Express Backend  │
-                    └────────┬─────────┘
-                             │
-                  ┌──────────┴──────────┐
-                  │                     │
-                  ▼                     ▼
-          ┌──────────────┐       ┌──────────────┐
-          │ PostgreSQL   │       │ Image/File   │
-          │   Database   │       │   Storage    │
-          └──────────────┘       └──────────────┘
-
-
-The architecture will be refined after studying the selected technologies and defining the system requirements.
-
----
-
-# 🗄️ Planned Data Model
-
-The initial system is expected to require entities such as:
-
-* Users
-* Issues
-* Categories
-* Votes / Supports
-* Issue Updates
-* Issue Evidence
-* Locations
-* Reports
-* Notifications
-
-The final database schema will be designed after completing the requirements and database-design phases.
-
----
-
-# 🔐 Security
-
-Security will be considered throughout development.
-
-Planned practices include:
-
-* Secure password hashing
-* JWT-based authentication
-* Role-based authorization
-* Input validation
-* API authorization
-* Protection of sensitive environment variables
-* Secure file upload handling
-* Protection against common web vulnerabilities
-* Appropriate rate limiting
-* Proper access control for administrative operations
-
----
-
-# 📈 Analytics
-
-The platform may provide analytics such as:
-
-* Total reported issues
-* Resolved issues
-* Pending issues
-* Issues by category
-* Issues by location
-* Average resolution time
-* Most supported issues
-* Issue trends over time
-
-These analytics can help identify recurring civic problems and areas requiring greater attention.
-
----
-
-# 🎓 Project Objective
-
-CivicVoice is being developed as a **B.Tech Computer Science Engineering semester project**.
-
-The project is intended to demonstrate practical knowledge of:
-
-* Full-stack web development
-* React
-* Node.js
-* Express.js
-* PostgreSQL
-* REST API design
-* Authentication and authorization
-* Database design
-* Location-based functionality
-* File and image handling
-* Search and filtering
-* Software architecture
-* Testing
-* Deployment
-* Optional AI integration
-
-The goal is to build something that goes beyond a basic academic CRUD application and demonstrates real-world software engineering practices.
-
----
-
-# 🛣️ Development Roadmap
-
-[✓] Project Concept
-    ↓
-[ ] Problem Definition
-    ↓
-[ ] Literature Survey
-    ↓
-[ ] Requirements Analysis
-    ↓
-[ ] Technology Understanding
-    ↓
-[ ] System Architecture
-    ↓
-[ ] Database Design
-    ↓
-[ ] UI/UX Design
-    ↓
-[ ] Backend Development
-    ↓
-[ ] Frontend Development
-    ↓
-[ ] Location & Search Features
-    ↓
-[ ] Issue Lifecycle
-    ↓
-[ ] Testing
-    ↓
-[ ] Deployment
-    ↓
-[ ] Optional AI Features
-
-
----
-
-# 📚 Project Documentation
-
-The project documentation will include:
-
-* Problem Statement
-* Literature Survey
-* Requirements
-* Project Timeline
-* System Architecture
-* Database Design
-* API Documentation
-* UI/UX Design
-* Testing Documentation
-* Deployment Documentation
-
----
-
-# ⚠️ Disclaimer
-
-CivicVoice is an educational and civic-engagement platform.
-
-It does not represent any government authority and does not replace official government complaint, grievance, or emergency-response systems.
-
-Information and functionality provided by the platform should not be interpreted as official government action or legal advice.
-
----
-
-# 📌 Project Status
-
-**Status:** 🟡 Planning & Research
-
-**Current Phase:** Understanding the project requirements and technologies
-
-Development will begin after the requirements, architecture, and technology choices have been sufficiently understood and documented.
-
----
-
-## 👨‍💻 Development Philosophy
-
-CivicVoice will be developed with emphasis on:
-
-* Clean architecture
-* Maintainable code
-* Security
-* Scalability
-* Reusable components
-* Good UI/UX
-* Proper documentation
-* Testing
-* Real-world engineering practices
-
-Major technical and architectural decisions will be documented throughout the development process.
+- Developed for **CS26013 CivicVoice**.
+- Design aesthetics inspired by **NY Philharmonic Gustavo Experience (JKR)**, **Taste-Skill Anti-Slop**, and **General Admission House**.

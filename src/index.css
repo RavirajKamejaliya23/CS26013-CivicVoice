@@ -1,0 +1,105 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --theme-bg: #080808;
+    --theme-bg-gradient: radial-gradient(circle at 50% 20%, #1c1c1c 0%, #0c0c0c 50%, #000000 100%);
+    --theme-card-bg: #141414;
+    --theme-card-border: rgba(255, 255, 255, 0.12);
+    --theme-text-primary: #ffffff;
+    --theme-text-secondary: #a3a3a3;
+    --theme-accent: #ffdd00;
+    --theme-accent-hover: #e6c700;
+    --theme-accent-contrast: #000000;
+    --theme-pill-bg: rgba(255, 255, 255, 0.08);
+    --theme-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.85);
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    color: var(--theme-text-primary);
+    background: var(--theme-bg);
+    min-height: 100vh;
+    margin: 0;
+    overflow-x: hidden;
+    transition: background 0.4s ease, color 0.4s ease;
+  }
+}
+
+/* Monumental Display Headlines (Gustavo / JKR style) */
+.font-monumental {
+  font-family: 'Bebas Neue', 'Anton', sans-serif;
+  letter-spacing: -0.01em;
+  line-height: 0.85;
+  text-transform: uppercase;
+}
+
+.font-editorial-heading {
+  font-family: 'Syne', sans-serif;
+  letter-spacing: -0.02em;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #000000;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--theme-accent);
+  border-radius: 4px;
+}
+
+/* Airmail Hatch Pattern */
+.airmail-border {
+  background: repeating-linear-gradient(
+    -45deg,
+    #ef4444,
+    #ef4444 14px,
+    #ffffff 14px,
+    #ffffff 20px,
+    #2563eb 20px,
+    #2563eb 34px,
+    #ffffff 34px,
+    #ffffff 40px
+  );
+}
+
+/* Kinetic Marquee Ticker */
+@keyframes marqueeScroll {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  display: flex;
+  width: max-content;
+  animation: marqueeScroll 25s linear infinite;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+/* Studio Floor Shadow */
+.studio-shadow {
+  filter: drop-shadow(0 32px 30px rgba(0, 0, 0, 0.35));
+}
+
+.studio-shadow-subtle {
+  filter: drop-shadow(0 16px 18px rgba(0, 0, 0, 0.25));
+}
+
+/* Audio Waveform Bar Animation */
+@keyframes wavePulse {
+  0%, 100% { height: 6px; }
+  50% { height: 28px; }
+}
+
+.animate-waveform-1 { animation: wavePulse 1.2s ease-in-out infinite; }
+.animate-waveform-2 { animation: wavePulse 0.9s ease-in-out infinite 0.2s; }
+.animate-waveform-3 { animation: wavePulse 1.5s ease-in-out infinite 0.4s; }
+.animate-waveform-4 { animation: wavePulse 1.1s ease-in-out infinite 0.1s; }
+.animate-waveform-5 { animation: wavePulse 1.3s ease-in-out infinite 0.3s; }
