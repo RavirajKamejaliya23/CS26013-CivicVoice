@@ -1,3 +1,26 @@
+# Dependencies
+node_modules
+*/node_modules
+
+# Environment variables
+.env
+.env.*
+*.env
+backend/.env
+backend/.env.*
+!.env.example
+!backend/.env.example
+
+# Build outputs
+dist
+dist-ssr
+build
+*/dist
+
+# Database and Schema files are explicitly NOT ignored:
+!database/schema.sql
+!database/seed.sql
+
 # Logs
 logs
 *.log
@@ -5,14 +28,12 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# Uploads
+backend/uploads/*
+!backend/uploads/.gitkeep
 
-# Editor directories and files
+# IDE and Editor files
 .vscode/*
 !.vscode/extensions.json
 .idea

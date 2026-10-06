@@ -1,19 +1,57 @@
-import React from 'react';
-import { BarChart3, CheckCircle2, Clock, AlertTriangle, TrendingUp, ShieldCheck, Layers, FileCheck } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { BarChart3, CheckCircle2, Clock, AlertTriangle, TrendingUp, ShieldCheck, Layers, FileCheck, Loader2 } from 'lucide-react';
 import { CATEGORIES } from '../data/mockIssues';
+import api from '../services/api';
 
-export default function StatsDashboard({ issues }) {
-  const total = issues.length;
-  const verified = issues.filter(i => i.status === 'citizen_verified').length;
-  const inProgress = issues.filter(i => i.status === 'in_progress').length;
-  const completed = issues.filter(i => i.status === 'completed').length;
-  const reopened = issues.filter(i => i.status === 'reopened').length;
+export default function StatsDashboard({ issues = [] }) {
+  const [statsData, setStatsData] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchStats = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const res = await api.issues.getStats();
+        if (isMounted && res) {
+          setStatsData(res);
+        }
+      } catch (err) {
+        console.error('Failed to load stats from backend:', err);
+        if (isMounted) {
+          setError(err.message || 'Failed to load live analytics ledger.');
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    fetchStats();
+    return () => {
+      isMounted = false;
+    };
+  }, [issues.length]);
+
+  // Use live stats from PostgreSQL if available, otherwise calculate from issues prop
+  const total = statsData?.total ?? issues.length;
+  const verified = statsData?.verified ?? issues.filter(i => i.status === 'citizen_verified').length;
+  const inProgress = statsData?.inProgress ?? issues.filter(i => i.status === 'in_progress').length;
+  const completed = statsData?.completed ?? issues.filter(i => i.status === 'completed').length;
+  const reopened = statsData?.reopened ?? issues.filter(i => i.status === 'reopened').length;
 
   const resolutionRate = total > 0 ? Math.round(((verified + completed) / total) * 100) : 0;
 
-  // Category counts
+  // Category counts from PostgreSQL category ledger
   const categoryCounts = CATEGORIES.filter(c => c.id !== 'all').map(cat => {
-    const count = issues.filter(i => i.category === cat.id).length;
+    const backendMatch = statsData?.categoryCounts?.find(b => b.id === cat.id);
+    const count = backendMatch !== undefined
+      ? parseInt(backendMatch.count, 10)
+      : issues.filter(i => i.category === cat.id).length;
     const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
     return { ...cat, count, percentage };
   });
@@ -37,11 +75,24 @@ export default function StatsDashboard({ issues }) {
         </div>
 
         <div className="flex items-center gap-3">
+          {isLoading && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-amber-500/10 text-amber-700 dark:text-amber-400 font-mono text-[11px] animate-pulse">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <span>Syncing Ledger...</span>
+            </div>
+          )}
           <div className="px-4 py-2 rounded-2xl bg-amber-500/15 border border-amber-600/30 text-amber-900 dark:text-amber-200 font-mono text-xs">
             Audit Period: <strong>Q4 2026</strong>
           </div>
         </div>
       </div>
+
+      {error && (
+        <div className="p-3.5 rounded-2xl bg-rose-950/60 border border-rose-800 text-rose-200 text-xs font-mono flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+          <span>{error} Showing cached ledger values.</span>
+        </div>
+      )}
 
       {/* KPI Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
