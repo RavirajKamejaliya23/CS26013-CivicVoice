@@ -46,15 +46,54 @@ export default function StatsDashboard({ issues = [] }) {
 
   const resolutionRate = total > 0 ? Math.round(((verified + completed) / total) * 100) : 0;
 
-  // Category counts from PostgreSQL category ledger
-  const categoryCounts = CATEGORIES.filter(c => c.id !== 'all').map(cat => {
-    const backendMatch = statsData?.categoryCounts?.find(b => b.id === cat.id);
-    const count = backendMatch !== undefined
-      ? parseInt(backendMatch.count, 10)
-      : issues.filter(i => i.category === cat.id).length;
-    const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
-    return { ...cat, count, percentage };
+  // Indian number formatting helper
+  const formatIndianNumber = (num) => {
+    if (num === null || num === undefined) return '0';
+    if (num >= 100000) {
+      const lakhs = (num / 100000).toFixed(1);
+      return `${lakhs} Lakh`;
+    }
+    return new Intl.NumberFormat('en-IN').format(num);
+  };
+
+  // Top category
+  const topCategory = categoryCounts.slice().sort((a, b) => b.count - a.count)[0];
+
+  // Ward counts from PostgreSQL stats or computed from issues
+  const rawWardCounts = statsData?.wardCounts || [];
+  const wardComparison = [
+    { ward: 'Ward 6', name: 'Gotri & Alkapuri' },
+    { ward: 'Ward 9', name: 'Manjalpur & GIDC' },
+    { ward: 'Ward 2', name: 'Fatehgunj & Sama' },
+    { ward: 'Ward 4', name: 'Sayajigunj' },
+    { ward: 'Ward 8', name: 'Waghodia Road' },
+    { ward: 'Ward 7', name: 'Akota' },
+    { ward: 'Ward 3', name: 'Karelibaug' },
+    { ward: 'Ward 10', name: 'Vasna-Bhayli' },
+    { ward: 'Ward 11', name: 'Makarpura' },
+  ].map((w) => {
+    const fromApi = rawWardCounts.find((item) => item.ward && item.ward.toLowerCase().includes(w.ward.toLowerCase()));
+    if (fromApi) {
+      return {
+        ...w,
+        count: parseInt(fromApi.count, 10),
+        unresolved: parseInt(fromApi.unresolved, 10),
+      };
+    }
+    const matchingIssues = issues.filter(
+      (i) => i.address && i.address.toLowerCase().includes(w.ward.toLowerCase())
+    );
+    const unresolved = matchingIssues.filter((i) =>
+      ['reported', 'under_review', 'accepted', 'in_progress', 'reopened'].includes(i.status)
+    ).length;
+    return {
+      ...w,
+      count: matchingIssues.length,
+      unresolved,
+    };
   });
+
+  const topUnresolvedWard = wardComparison.slice().sort((a, b) => b.unresolved - a.unresolved)[0];
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
@@ -64,13 +103,13 @@ export default function StatsDashboard({ issues = [] }) {
         <div>
           <div className="flex items-center gap-2 text-xs font-mono font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400 mb-1">
             <BarChart3 className="w-4 h-4" />
-            <span>Municipal Transparency Ledger</span>
+            <span>Vadodara Municipal Corporation · Transparency Index</span>
           </div>
           <h2 className="text-2xl font-black text-stone-900 dark:text-stone-100">
-            Public Works Accountability Index
+            Public Civic Accountability Dashboard
           </h2>
           <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
-            Real-time verification audit of civic dispatches and contractor performance
+            Real-time citizen verification audit, ward workloads, and infrastructure clearance
           </p>
         </div>
 
@@ -82,7 +121,7 @@ export default function StatsDashboard({ issues = [] }) {
             </div>
           )}
           <div className="px-4 py-2 rounded-2xl bg-amber-500/15 border border-amber-600/30 text-amber-900 dark:text-amber-200 font-mono text-xs">
-            Audit Period: <strong>Q4 2026</strong>
+            City: <strong>Vadodara (VMC)</strong>
           </div>
         </div>
       </div>
@@ -94,70 +133,79 @@ export default function StatsDashboard({ issues = [] }) {
         </div>
       )}
 
-      {/* KPI Metric Cards */}
+      {/* KPI Metric Cards answering key questions */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
         <div className="p-5 rounded-3xl bg-white/90 dark:bg-stone-900/90 border border-stone-800/10 dark:border-stone-700/40 shadow-sm">
-          <div className="flex items-center justify-between mb-3 text-stone-500">
-            <span className="text-xs font-mono uppercase tracking-wider">Total Dispatched</span>
+          <div className="flex items-center justify-between mb-2 text-stone-500">
+            <span className="text-[11px] font-mono uppercase tracking-wider font-bold">Total Complaints</span>
             <Layers className="w-4 h-4 text-stone-400" />
           </div>
           <div className="text-3xl font-black font-mono text-stone-950 dark:text-stone-50">
-            {total}
+            {formatIndianNumber(total)}
           </div>
-          <div className="text-[11px] font-mono text-stone-500 mt-1">
-            Across 12 Municipal Wards
-          </div>
-        </div>
-
-        <div className="p-5 rounded-3xl bg-white/90 dark:bg-stone-900/90 border border-stone-800/10 dark:border-stone-700/40 shadow-sm">
-          <div className="flex items-center justify-between mb-3 text-emerald-600">
-            <span className="text-xs font-mono uppercase tracking-wider">Citizen Certified</span>
-            <CheckCircle2 className="w-4 h-4" />
-          </div>
-          <div className="text-3xl font-black font-mono text-emerald-600 dark:text-emerald-400">
-            {verified}
-          </div>
-          <div className="text-[11px] font-mono text-stone-500 mt-1">
-            Audited & Approved by Residents
+          <div className="text-[11px] font-mono text-stone-400 mt-1">
+            Across 9 Vadodara Municipal Wards
           </div>
         </div>
 
         <div className="p-5 rounded-3xl bg-white/90 dark:bg-stone-900/90 border border-stone-800/10 dark:border-stone-700/40 shadow-sm">
-          <div className="flex items-center justify-between mb-3 text-purple-600">
-            <span className="text-xs font-mono uppercase tracking-wider">Squads Onsite</span>
-            <Clock className="w-4 h-4" />
+          <div className="flex items-center justify-between mb-2 text-purple-600">
+            <span className="text-[11px] font-mono uppercase tracking-wider font-bold">How many in progress?</span>
+            <Clock className="w-4 h-4 text-purple-400" />
           </div>
           <div className="text-3xl font-black font-mono text-purple-600 dark:text-purple-400">
-            {inProgress}
+            {formatIndianNumber(inProgress)}
           </div>
-          <div className="text-[11px] font-mono text-stone-500 mt-1">
-            Active repair crews working
+          <div className="text-[11px] font-mono text-stone-400 mt-1">
+            Municipal crews active onsite
           </div>
         </div>
 
         <div className="p-5 rounded-3xl bg-white/90 dark:bg-stone-900/90 border border-stone-800/10 dark:border-stone-700/40 shadow-sm">
-          <div className="flex items-center justify-between mb-3 text-rose-600">
-            <span className="text-xs font-mono uppercase tracking-wider">Citizen Reopened</span>
-            <AlertTriangle className="w-4 h-4" />
+          <div className="flex items-center justify-between mb-2 text-emerald-600">
+            <span className="text-[11px] font-mono uppercase tracking-wider font-bold">Citizen Verified</span>
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          </div>
+          <div className="text-3xl font-black font-mono text-emerald-600 dark:text-emerald-400">
+            {formatIndianNumber(verified)}
+          </div>
+          <div className="text-[11px] font-mono text-stone-400 mt-1">
+            Certified resolved by residents
+          </div>
+        </div>
+
+        <div className="p-5 rounded-3xl bg-white/90 dark:bg-stone-900/90 border border-stone-800/10 dark:border-stone-700/40 shadow-sm">
+          <div className="flex items-center justify-between mb-2 text-rose-600">
+            <span className="text-[11px] font-mono uppercase tracking-wider font-bold">Work Reopened</span>
+            <AlertTriangle className="w-4 h-4 text-rose-400" />
           </div>
           <div className="text-3xl font-black font-mono text-rose-600 dark:text-rose-400">
-            {reopened}
+            {formatIndianNumber(reopened)}
           </div>
-          <div className="text-[11px] font-mono text-stone-500 mt-1">
-            Contractor work rejected by public
+          <div className="text-[11px] font-mono text-stone-400 mt-1">
+            Contractor repairs challenged
           </div>
         </div>
 
       </div>
 
-      {/* Category Breakdown & Progress */}
+      {/* Question 1: Which category has the most complaints? */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
         <div className="lg:col-span-7 p-6 rounded-3xl bg-white/90 dark:bg-stone-900/90 border border-stone-800/10 dark:border-stone-700/40 shadow-sm space-y-4">
-          <div className="font-bold text-sm text-stone-900 dark:text-stone-100 flex items-center justify-between">
-            <span>Dispatches by Infrastructure Category</span>
-            <span className="text-xs font-mono text-stone-500">Volume</span>
+          <div>
+            <div className="text-[11px] font-mono text-amber-500 uppercase tracking-wider font-bold">
+              Question 1
+            </div>
+            <h3 className="font-bold text-base text-stone-900 dark:text-stone-100 flex items-center justify-between">
+              <span>Which category has the most complaints?</span>
+              {topCategory && (
+                <span className="text-xs font-mono text-amber-400 bg-amber-500/15 px-2.5 py-1 rounded-lg border border-amber-500/30">
+                  Top: {topCategory.label}
+                </span>
+              )}
+            </h3>
           </div>
 
           <div className="space-y-3.5 pt-2">
@@ -165,7 +213,7 @@ export default function StatsDashboard({ issues = [] }) {
               <div key={cat.id} className="space-y-1">
                 <div className="flex items-center justify-between text-xs font-semibold text-stone-700 dark:text-stone-300">
                   <span>{cat.label}</span>
-                  <span className="font-mono text-stone-500">{cat.count} tickets ({cat.percentage}%)</span>
+                  <span className="font-mono text-stone-400">{cat.count} complaints ({cat.percentage}%)</span>
                 </div>
                 <div className="w-full h-2 rounded-full bg-stone-100 dark:bg-stone-800 overflow-hidden">
                   <div
@@ -178,27 +226,84 @@ export default function StatsDashboard({ issues = [] }) {
           </div>
         </div>
 
-        {/* Resolution Velocity & Trust Card */}
-        <div className="lg:col-span-5 p-6 rounded-3xl bg-gradient-to-br from-amber-500/10 to-amber-600/5 dark:from-stone-900 dark:to-stone-800 border border-amber-500/20 rounded-3xl space-y-5">
-          <div className="flex items-center gap-2 text-xs font-mono font-bold text-amber-800 dark:text-amber-400 uppercase">
-            <ShieldCheck className="w-4 h-4" />
-            <span>Anti-Corruption Verification Rate</span>
+        {/* Question 2: How quickly are complaints being resolved? */}
+        <div className="lg:col-span-5 p-6 rounded-3xl bg-gradient-to-br from-amber-500/10 to-amber-600/5 dark:from-stone-900 dark:to-stone-800 border border-amber-500/20 rounded-3xl space-y-5 flex flex-col justify-between">
+          <div>
+            <div className="text-[11px] font-mono text-amber-500 uppercase tracking-wider font-bold">
+              Question 2
+            </div>
+            <h3 className="font-bold text-base text-stone-900 dark:text-stone-100 flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-amber-400" />
+              <span>How quickly are complaints being resolved?</span>
+            </h3>
           </div>
 
           <div className="text-center py-4 space-y-1">
-            <div className="text-5xl font-black font-mono text-amber-900 dark:text-amber-200">
+            <div className="text-6xl font-black font-mono text-amber-900 dark:text-amber-200">
               {resolutionRate}%
             </div>
-            <div className="text-xs font-mono text-stone-600 dark:text-stone-400">
-              Resolved & Verified Clearance Rate
+            <div className="text-xs font-mono text-stone-600 dark:text-stone-400 font-bold uppercase tracking-wider">
+              Overall Resolution & Verification Rate
             </div>
           </div>
 
-          <div className="p-4 rounded-2xl bg-white/70 dark:bg-stone-900/70 border border-stone-200 dark:border-stone-700 text-xs text-stone-600 dark:text-stone-300 leading-relaxed">
-            Every issue marked "Completed" by municipal officers triggers a 7-day community challenge window. If the repair does not withstand public inspection, citizens can instantly reopen the ticket.
+          <div className="p-4 rounded-2xl bg-white/70 dark:bg-stone-950/70 border border-stone-200 dark:border-stone-800 text-xs text-stone-600 dark:text-stone-300 leading-relaxed font-mono">
+            Every issue marked "Completed" by municipal officers triggers a 7-day citizen inspection period. If the work does not withstand scrutiny, citizens can reopen the ticket with photographic proof.
           </div>
         </div>
 
+      </div>
+
+      {/* Question 3: Which ward has the most unresolved complaints? */}
+      <div className="p-6 rounded-3xl bg-white/90 dark:bg-stone-900/90 border border-stone-800/10 dark:border-stone-700/40 shadow-sm space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <div className="text-[11px] font-mono text-amber-500 uppercase tracking-wider font-bold">
+              Question 3
+            </div>
+            <h3 className="font-bold text-lg text-stone-900 dark:text-stone-100">
+              Which ward has the most unresolved complaints?
+            </h3>
+            <p className="text-xs font-mono text-stone-400 mt-0.5">
+              Comparative analysis of civic workload across Vadodara Municipal Corporation wards
+            </p>
+          </div>
+          {topUnresolvedWard && (
+            <div className="px-3.5 py-1.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 font-mono text-xs font-bold w-fit">
+              Highest backlog: {topUnresolvedWard.ward} ({topUnresolvedWard.name}) · {topUnresolvedWard.unresolved} unresolved
+            </div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {wardComparison.map((w) => {
+            const isTop = topUnresolvedWard && topUnresolvedWard.ward === w.ward && w.unresolved > 0;
+            return (
+              <div
+                key={w.ward}
+                className={`p-4 rounded-2xl border transition-all ${
+                  isTop
+                    ? 'bg-rose-950/20 border-rose-800/60 ring-1 ring-rose-700/40'
+                    : 'bg-stone-950/40 border-stone-800'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
+                    {w.ward}
+                  </span>
+                  <span className={`text-xs font-mono font-bold ${w.unresolved > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                    {w.unresolved} Unresolved
+                  </span>
+                </div>
+                <div className="text-xs font-bold text-white font-mono">{w.name}</div>
+                <div className="flex items-center justify-between text-[11px] font-mono text-stone-400 mt-2 pt-2 border-t border-stone-800">
+                  <span>Total Filed: {w.count}</span>
+                  <span className="text-emerald-400">{Math.max(0, w.count - w.unresolved)} Completed</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
     </div>

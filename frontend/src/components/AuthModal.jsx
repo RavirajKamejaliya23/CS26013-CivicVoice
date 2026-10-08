@@ -1,11 +1,9 @@
 import React, { useState } from 'react';
 import { X, Lock, Mail, User, ShieldCheck, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { sound } from '../utils/audio';
+import { sound, safePlaySound } from '../utils/audio';
 
 export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
-  if (!isOpen) return null;
-
   const { login, register } = useAuth();
   const [mode, setMode] = useState('login'); // 'login' or 'register'
   const [email, setEmail] = useState('');
@@ -13,6 +11,8 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  if (!isOpen) return null;
 
   const fillQuickDemo = (demoRole) => {
     setError('');
@@ -53,7 +53,10 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
         await register(name.trim(), email.trim(), password);
       }
 
-      sound.playTimpaniBoom();
+      try {
+        safePlaySound('playTimpaniBoom');
+      } catch (_) {}
+
       if (onAuthSuccess) onAuthSuccess();
       onClose();
     } catch (err) {

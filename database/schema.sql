@@ -112,6 +112,7 @@ CREATE TABLE issues (
     reporter_badge VARCHAR(100) DEFAULT 'Civic Steward',
     reporter_avatar TEXT DEFAULT 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
     upvotes_count INT DEFAULT 0,
+    duplicate_of VARCHAR(50) DEFAULT NULL REFERENCES issues(id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -121,6 +122,7 @@ CREATE INDEX idx_issues_category ON issues(category_id);
 CREATE INDEX idx_issues_created_at ON issues(created_at DESC);
 CREATE INDEX idx_issues_reporter ON issues(reported_by_id);
 CREATE INDEX idx_issues_location ON issues(location_id);
+CREATE INDEX idx_issues_duplicate_of ON issues(duplicate_of);
 
 -- ============================================================================
 -- 6. ISSUE MEDIA TABLE (Multi-photo support: up to 10 photos per issue)

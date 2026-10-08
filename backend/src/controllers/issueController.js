@@ -66,9 +66,9 @@ export const createIssue = async (req, res, next) => {
       return sendError(res, 'A maximum of 10 photos can be attached to an issue dispatch.', 400);
     }
 
-    // Generate unique ID in the format CV-2026-XXXX
+    // Generate unique ID in the format CV-VAD-2026-XXXX
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    const id = `CV-2026-${randomSuffix}`;
+    const id = `CV-VAD-2026-${randomSuffix}`;
 
     const newIssue = await issueModel.createIssue({
       id,
@@ -76,8 +76,8 @@ export const createIssue = async (req, res, next) => {
       description: description.trim(),
       category,
       address: address.trim(),
-      latitude: latitude || 37.7749,
-      longitude: longitude || -122.4194,
+      latitude: latitude || 22.3168,
+      longitude: longitude || 73.1495,
       imageUrl: photos[0] || 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=800&auto=format&fit=crop&q=80',
       mediaUrls: photos,
       reportedById: req.user ? req.user.id : null,
@@ -233,3 +233,110 @@ export const deleteIssue = async (req, res, next) => {
     next(error);
   }
 };
+
+export const getSimilarIssues = async (req, res, next) => {
+  try {
+    const { category, latitude, longitude, radius, title, description } = req.query;
+
+    if (!category || !latitude || !longitude) {
+      return sendError(res, 'category, latitude, and longitude are required parameters.', 400);
+    }
+
+    const lat = parseFloat(latitude);
+    const lng = parseFloat(longitude);
+    const radiusMetres = radius ? Math.min(parseInt(radius, 10), 5000) : null;
+
+    if (isNaN(lat) || isNaN(lng)) {
+      return sendError(res, 'latitude and longitude must be valid numbers.', 400);
+    }
+
+    const similar = await issueModel.getSimilarIssues({
+      category,
+      latitude: lat,
+      longitude: lng,
+      title: title || '',
+      description: description || '',
+      radiusMetres,
+    });
+
+    return sendSuccess(res, { similar }, 'Similar complaints retrieved.');
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const joinCanonicalIssue = async (req, res, next) => {
+  try {
+    const { id: canonicalId } = req.params;
+    const userId = req.user ? req.user.id : null;
+    const userName = req.user ? req.user.name : 'Citizen Supporter';
+
+    if (!userId) {
+      return sendError(res, 'Authentication required to support a complaint.', 401);
+    }
+
+    const result = await issueModel.joinCanonicalIssue(userId, userName, canonicalId);
+    if (result.notFound) {
+      return sendError(res, result.error, 404);
+    }
+
+    return sendSuccess(res, result, result.message, 200);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const markAsDuplicate = async (req, res, next) => {
+  try {
+    const { id: duplicateId } = req.params;
+    const { canonicalId } = req.body;
+
+    if (!canonicalId) {
+      return sendError(res, 'canonicalId is required — the ID of the original issue this duplicates.', 400);
+    }
+
+    if (duplicateId === canonicalId) {
+      return sendError(res, 'An issue cannot be marked as a duplicate of itself.', 400);
+    }
+
+    const result = await issueModel.markAsDuplicate(
+      duplicateId,
+      canonicalId,
+      req.user ? req.user.id : null,
+      req.user ? req.user.name : 'Administrator'
+    );
+
+    if (!result) {
+      return sendError(res, 'One or both issue IDs not found.', 404);
+    }
+
+    return sendSuccess(res, result, `Issue ${duplicateId} marked as duplicate of ${canonicalId}.`);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const unmarkAsDuplicate = async (req, res, next) => {
+  try {
+    const { id: duplicateId } = req.params;
+
+    const result = await issueModel.unlinkDuplicate(
+      duplicateId,
+      req.user ? req.user.id : null,
+      req.user ? req.user.name : 'Administrator'
+    );
+
+    if (!result) {
+      return sendError(res, `Issue '${duplicateId}' not found.`, 404);
+    }
+
+    if (result.unlinked === false) {
+      return sendError(res, result.message, 400);
+    }
+
+    return sendSuccess(res, result, `Issue ${duplicateId} duplicate status unlinked.`);
+  } catch (error) {
+    next(error);
+  }
+};
+

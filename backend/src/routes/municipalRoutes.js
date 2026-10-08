@@ -8,5 +8,6 @@ const router = Router();
 router.use(authenticateUser, authorizeRoles('MUNICIPAL', 'ADMIN'));
 
 router.get('/overview', municipalController.getMunicipalOverview);
+router.get('/issues', municipalController.getMunicipalIssues);
 
 export default router;

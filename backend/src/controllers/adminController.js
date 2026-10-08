@@ -21,6 +21,11 @@ export const updateUserRole = async (req, res, next) => {
       return sendError(res, `Invalid role. Allowed roles are: ${validRoles.join(', ')}`, 400);
     }
 
+    // Prevent admin from accidentally demoting themselves
+    if (parseInt(id, 10) === req.user.id && role.toUpperCase() !== 'ADMIN') {
+      return sendError(res, 'Administrators cannot change their own role. Ask another admin.', 403);
+    }
+
     const updatedUser = await userModel.updateUserRole(id, role.toUpperCase());
     if (!updatedUser) {
       return sendError(res, `User with ID ${id} not found.`, 404);
@@ -45,6 +50,16 @@ export const getAdminOverview = async (req, res, next) => {
       },
       'Administrative system overview retrieved.'
     );
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getAllIssuesAdmin = async (req, res, next) => {
+  try {
+    const { category, status, search } = req.query;
+    const issues = await issueModel.getAllIssues({ category, status, search });
+    return sendSuccess(res, { issues }, 'Admin issue registry retrieved.');
   } catch (error) {
     next(error);
   }

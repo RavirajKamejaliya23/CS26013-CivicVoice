@@ -3,13 +3,13 @@ import { X, CheckCircle2, RotateCcw, AlertCircle, Camera, ShieldCheck } from 'lu
 import confetti from 'canvas-confetti';
 
 export default function CitizenVerifyModal({ issue, isVerifyingResolved, onClose, onConfirm }) {
-  if (!issue) return null;
-
   const [comment, setComment] = useState(
     isVerifyingResolved
       ? 'Inspected in person. The work was completed satisfactorily!'
       : 'The reported issue still exists. Debris remains scattered.'
   );
+
+  if (!issue) return null;
 
   const handleSubmit = (e) => {
     e.preventDefault();

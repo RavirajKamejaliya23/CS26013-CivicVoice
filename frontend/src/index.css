@@ -3,15 +3,21 @@
 @layer base {
   :root {
     --theme-bg: #080808;
-    --theme-bg-gradient: radial-gradient(circle at 50% 20%, #1c1c1c 0%, #0c0c0c 50%, #000000 100%);
+    --theme-bg-gradient: radial-gradient(ellipse at 50% 15%, #1c1c1c 0%, #0a0a0a 55%, #000000 100%);
+    --theme-surface: #141414;
+    --theme-surface-secondary: #1e1e1e;
     --theme-card-bg: #141414;
-    --theme-card-border: rgba(255, 255, 255, 0.12);
+    --theme-card-border: rgba(255, 255, 255, 0.14);
     --theme-text-primary: #ffffff;
     --theme-text-secondary: #a3a3a3;
+    --theme-text-muted: #737373;
+    --theme-heading: #ffffff;
     --theme-accent: #ffdd00;
     --theme-accent-hover: #e6c700;
     --theme-accent-contrast: #000000;
-    --theme-pill-bg: rgba(255, 255, 255, 0.08);
+    --theme-pill-bg: rgba(255, 221, 0, 0.12);
+    --theme-border: rgba(255, 221, 0, 0.35);
+    --theme-hero-glow: rgba(255, 221, 0, 0.2);
     --theme-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.85);
   }
 
@@ -22,7 +28,16 @@
     min-height: 100vh;
     margin: 0;
     overflow-x: hidden;
-    transition: background 0.4s ease, color 0.4s ease;
+    transition: background 0.3s ease, color 0.3s ease;
+  }
+
+  /* High contrast semantic theme elements */
+  h1, h2, h3, h4, h5, h6 {
+    color: var(--theme-heading, var(--theme-text-primary));
+  }
+
+  input, textarea, select {
+    color: inherit;
   }
 }
 

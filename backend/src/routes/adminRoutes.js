@@ -10,5 +10,6 @@ router.use(authenticateUser, authorizeRoles('ADMIN'));
 router.get('/users', adminController.getUsers);
 router.patch('/users/:id/role', adminController.updateUserRole);
 router.get('/overview', adminController.getAdminOverview);
+router.get('/issues', adminController.getAllIssuesAdmin);
 
 export default router;

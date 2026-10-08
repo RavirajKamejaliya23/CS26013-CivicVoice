@@ -50,7 +50,10 @@ export default function GustavoHero({ onOpenReportModal, onScrollToVault, totalI
 
       {/* Monumental Condensed Headline (NY Phil / JKR style) */}
       <div className="text-center sm:text-left space-y-2 mb-10">
-        <h1 className="font-monumental text-6xl sm:text-8xl md:text-9xl lg:text-[11.5rem] tracking-tighter text-white uppercase select-none drop-shadow-2xl">
+        <h1
+          className="font-monumental text-6xl sm:text-8xl md:text-9xl lg:text-[11.5rem] tracking-tighter uppercase select-none drop-shadow-2xl"
+          style={{ color: 'var(--theme-heading, #ffffff)' }}
+        >
           THIS CITY <br />
           <span className="text-yellow-400 underline decoration-white/20 underline-offset-8">
             BELONGS TO YOU.
@@ -58,7 +61,10 @@ export default function GustavoHero({ onOpenReportModal, onScrollToVault, totalI
         </h1>
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t border-white/10">
-          <p className="font-mono text-xs sm:text-sm text-stone-300 uppercase tracking-wider max-w-xl">
+          <p
+            className="font-mono text-xs sm:text-sm uppercase tracking-wider max-w-xl"
+            style={{ color: 'var(--theme-text-secondary, #d6d3d1)' }}
+          >
             You are the conductor of your street. Report infrastructure hazards, co-sign neighbor dispatches, and certify city hall resolutions with photographic proof.
           </p>
 

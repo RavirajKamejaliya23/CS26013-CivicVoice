@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Navbar from './components/Navbar';
 import GustavoHero from './components/GustavoHero';
 import MailboxStage from './components/MailboxStage';
@@ -11,18 +11,24 @@ import IssueTimelineModal from './components/IssueTimelineModal';
 import AdminActionModal from './components/AdminActionModal';
 import CitizenVerifyModal from './components/CitizenVerifyModal';
 import AuthModal from './components/AuthModal';
-import InteractiveMapPreview from './components/InteractiveMapPreview';
+import LeafletMap from './components/LeafletMap';
 import StatsDashboard from './components/StatsDashboard';
-import { INITIAL_ISSUES, STATUS_CONFIG } from './data/mockIssues';
+import MunicipalDashboard from './components/MunicipalDashboard';
+import AdminDashboard from './components/AdminDashboard';
+import CitizenDashboard from './components/CitizenDashboard';
+import { INITIAL_ISSUES, CATEGORIES } from './data/mockIssues';
 import { THEMES } from './data/themes';
-import { sound } from './utils/audio';
+import { sound, safePlaySound } from './utils/audio';
 import { useAuth } from './context/AuthContext';
-import { Search, Plus, AlertCircle, CheckCircle2, X, Loader2 } from 'lucide-react';
+import api from './services/api';
+import { Search, Plus, AlertCircle, CheckCircle2, X, Loader2, RefreshCw } from 'lucide-react';
 
 export default function App() {
   const { user, role, isAuthenticated } = useAuth();
   const [currentTheme, setCurrentTheme] = useState('gustavoStage');
   const [issues, setIssues] = useState(INITIAL_ISSUES);
+  const [isLoadingIssues, setIsLoadingIssues] = useState(false);
+  const [issuesError, setIssuesError] = useState(null);
   const [activeTab, setActiveTab] = useState('feed');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
@@ -45,33 +51,37 @@ export default function App() {
     }, 6000);
   };
 
-  // Canonical role passed to child components: 'CITIZEN' | 'MUNICIPAL' | 'ADMIN'
+  // Canonical role
   const userRole = role || 'CITIZEN';
 
-  // Load live issues from backend on mount and auth state change
-  useEffect(() => {
-    const fetchIssues = async () => {
-      try {
-        const liveIssues = await api.issues.getAll();
-        if (liveIssues && liveIssues.length > 0) {
-          setIssues(liveIssues);
-        }
-      } catch (err) {
-        console.warn('[BACKEND API] Could not load live issues, falling back to cached seed dispatches.');
+  // ── LOAD LIVE ISSUES ────────────────────────────────────────────────────────
+  const fetchIssues = useCallback(async () => {
+    setIsLoadingIssues(true);
+    setIssuesError(null);
+    try {
+      const liveIssues = await api.issues.getAll();
+      if (liveIssues && liveIssues.length > 0) {
+        setIssues(liveIssues);
       }
-    };
+    } catch (err) {
+      console.warn('[BACKEND API] Could not load live issues:', err.message);
+      setIssuesError('Unable to load live issues from server. Showing cached data.');
+    } finally {
+      setIsLoadingIssues(false);
+    }
+  }, []);
+
+  useEffect(() => {
     fetchIssues();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, fetchIssues]);
 
   // Apply theme styles dynamically
   useEffect(() => {
     const theme = THEMES[currentTheme] || THEMES.gustavoStage;
     const root = document.documentElement;
-
     Object.entries(theme.styles).forEach(([prop, val]) => {
       root.style.setProperty(prop, val);
     });
-
     if (theme.isDark) {
       root.classList.add('dark');
     } else {
@@ -79,21 +89,33 @@ export default function App() {
     }
   }, [currentTheme]);
 
-  // Scroll down to sorting vault
+  // Auto-route to role home tab when role changes
+  useEffect(() => {
+    if (isAuthenticated) {
+      if (role === 'ADMIN') setActiveTab('admin');
+      else if (role === 'MUNICIPAL') setActiveTab('municipal');
+      else setActiveTab('citizen');
+    }
+  }, [isAuthenticated, role]);
+
+  // Redirect non-privileged users away from restricted tabs
+  useEffect(() => {
+    if (['municipal', 'departments'].includes(activeTab) && !['MUNICIPAL', 'ADMIN'].includes(userRole)) {
+      setActiveTab('feed');
+    }
+    if (['admin', 'users', 'duplicates'].includes(activeTab) && userRole !== 'ADMIN') {
+      setActiveTab('feed');
+    }
+  }, [activeTab, userRole]);
+
   const scrollToVault = () => {
     sound.playPaperWhoosh();
     const vault = document.getElementById('sorting-vault');
-    if (vault) {
-      vault.scrollIntoView({ behavior: 'smooth' });
-    }
+    if (vault) vault.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // When a mail drops into the mailbox slot
-  const handleMailCollected = () => {
-    setCollectedCount((prev) => prev + 1);
-  };
+  const handleMailCollected = () => setCollectedCount((prev) => prev + 1);
 
-  // Fetch full detailed issue including issue_updates timeline from backend
   const handleOpenTimeline = async (issueOrId) => {
     const issueId = typeof issueOrId === 'string' ? issueOrId : issueOrId?.id;
     if (!issueId) return;
@@ -117,24 +139,18 @@ export default function App() {
     }
   };
 
-  // Handle Upvote / Co-sign with real backend sync
   const handleUpvote = async (issueId) => {
     if (!isAuthenticated) {
       sound.playTick();
       setIsAuthModalOpen(true);
       return;
     }
-
     try {
       const result = await api.issues.upvote(issueId);
       setIssues((prev) =>
         prev.map((issue) => {
           if (issue.id === issueId) {
-            return {
-              ...issue,
-              hasUpvoted: result.hasUpvoted,
-              upvotes: result.upvotes,
-            };
+            return { ...issue, hasUpvoted: result.hasUpvoted, upvotes: result.upvotes };
           }
           return issue;
         })
@@ -148,10 +164,8 @@ export default function App() {
     }
   };
 
-  // Add new reported issue to real backend (No local fallback on rejection)
   const handleAddIssue = async (newIssue) => {
     sound.playSlotDrop();
-
     try {
       const created = await api.issues.create({
         title: newIssue.title,
@@ -178,12 +192,30 @@ export default function App() {
         type: 'error',
         message: err.message || 'Issue submission was rejected by the server.',
       });
-      // Do NOT mutate local state on failure
     }
   };
 
-  // Municipal / Admin status update with real backend sync (No local fallback on rejection)
-  const handleUpdateStatus = async (issueId, updateData) => {
+  const handleUpdateStatus = async (issueOrUpdateData, updateDataArg) => {
+    // handleUpdateStatus can be called with (issue, updateData) from AdminDashboard
+    // or with (issueId, updateData) from handleUpdateStatusById
+    let issueId, updateData;
+    if (typeof issueOrUpdateData === 'string') {
+      issueId = issueOrUpdateData;
+      updateData = updateDataArg;
+    } else if (issueOrUpdateData && issueOrUpdateData.id && !updateDataArg) {
+      // Called from MunicipalDashboard or AdminDashboard with just the issue object
+      setAdminActionIssue(issueOrUpdateData);
+      return;
+    } else {
+      issueId = issueOrUpdateData;
+      updateData = updateDataArg;
+    }
+
+    if (!updateData) {
+      setAdminActionIssue(typeof issueOrUpdateData === 'object' ? issueOrUpdateData : null);
+      return;
+    }
+
     try {
       const updated = await api.issues.updateStatus(issueId, {
         status: updateData.status,
@@ -212,17 +244,19 @@ export default function App() {
         type: 'error',
         message: err.message || 'Status update was rejected by the server.',
       });
-      // Do NOT mutate local state on failure
     }
   };
 
-  // Citizen verification or reopen with real backend sync (No local fallback on rejection)
+  // Wrapper for AdminActionModal callback
+  const handleUpdateStatusFromModal = async (issueId, updateData) => {
+    await handleUpdateStatus(issueId, updateData);
+  };
+
   const handleVerify = async (issueId, verifyData) => {
     if (!isAuthenticated) {
       setIsAuthModalOpen(true);
       return;
     }
-
     try {
       const verified = await api.issues.verify(issueId, {
         isResolved: verifyData.isResolved,
@@ -250,11 +284,10 @@ export default function App() {
         type: 'error',
         message: err.message || 'Verification submission was rejected by the server.',
       });
-      // Do NOT mutate local state on failure
     }
   };
 
-  // Filter issues
+  // Filter issues for the feed
   const filteredIssues = issues.filter((issue) => {
     const matchesCategory = selectedCategory === 'all' || issue.category === selectedCategory;
     const matchesStatus = selectedStatus === 'all' || issue.status === selectedStatus;
@@ -264,11 +297,18 @@ export default function App() {
       issue.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
       issue.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
       issue.address.toLowerCase().includes(searchQuery.toLowerCase());
-
     return matchesCategory && matchesStatus && matchesSearch;
   });
 
   const verifiedCount = issues.filter((i) => i.status === 'citizen_verified').length;
+
+  const openReportModal = () => {
+    if (!isAuthenticated) {
+      setIsAuthModalOpen(true);
+    } else {
+      setIsReportModalOpen(true);
+    }
+  };
 
   return (
     <div
@@ -281,130 +321,206 @@ export default function App() {
         onSelectTheme={setCurrentTheme}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        onOpenReportModal={() => {
-          if (!isAuthenticated) {
-            setIsAuthModalOpen(true);
-          } else {
-            setIsReportModalOpen(true);
-          }
-        }}
+        onOpenReportModal={openReportModal}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
         issuesCount={issues.length}
       />
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pb-20">
-        {/* Tab 1: Live Interactive Mailbox & Community Feed */}
+
+        {/* ── TAB: CITIZEN DASHBOARD ─────────────────────────────────────────── */}
+        {(activeTab === 'citizen' || activeTab === 'activity') && (
+          <div className="pt-6">
+            <CitizenDashboard
+              issues={issues}
+              user={user}
+              initialFilter={activeTab === 'activity' ? 'my_reports' : 'all'}
+              onOpenReportModal={openReportModal}
+              onOpenTimeline={handleOpenTimeline}
+              onUpvote={handleUpvote}
+              onVerify={(issue, isResolved) =>
+                setVerifyIssueData({ issue, isVerifyingResolved: isResolved })
+              }
+              onNavigateTab={(tab) => setActiveTab(tab)}
+            />
+          </div>
+        )}
+
+        {/* ── TAB: FEED ──────────────────────────────────────────────────────── */}
         {activeTab === 'feed' && (
           <div className="space-y-4">
-            {/* STAGE 1: Monumental Overture Hero with Unfolding 3D Airmail Letter */}
             <GustavoHero
-              onOpenReportModal={() => {
-                if (!isAuthenticated) setIsAuthModalOpen(true);
-                else setIsReportModalOpen(true);
-              }}
+              onOpenReportModal={openReportModal}
               onScrollToVault={scrollToVault}
               totalIssues={issues.length}
               verifiedCount={verifiedCount}
             />
 
-            {/* STAGE 2: Interactive 3D Postbox & Letter Drop Stage */}
             <MailboxStage
               issues={issues}
               collectedCount={collectedCount}
               onMailCollected={handleMailCollected}
-              onOpenReportModal={() => {
-                if (!isAuthenticated) setIsAuthModalOpen(true);
-                else setIsReportModalOpen(true);
-              }}
+              onOpenReportModal={openReportModal}
               onScrollToVault={scrollToVault}
             />
 
-            {/* STAGE 3: Vertical Downward Mail Chute Transit */}
             <MailChuteScroll recentMails={issues.slice(0, 3)} />
 
-            {/* STAGE 4: Underground Municipal Sorting Vault */}
             <SortingVault
               issues={issues}
               onSelectIssue={handleOpenTimeline}
               onUpvote={handleUpvote}
             />
 
-            {/* STAGE 5: The 6 Symphonic Movements of Resolution */}
             <SymphonicMovements issues={issues} onSelectIssue={handleOpenTimeline} />
 
-            {/* STAGE 6: Community Feed Search & Full Grid */}
+            {/* Community Feed */}
             <section className="space-y-6 pt-12 border-t-2 border-white/10">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <h3 className="font-monumental text-3xl sm:text-5xl text-white uppercase tracking-tight">
+                  <h3
+                    className="font-monumental text-3xl sm:text-5xl uppercase tracking-tight"
+                    style={{ color: 'var(--theme-heading, #ffffff)' }}
+                  >
                     Live Street Dispatches
                   </h3>
-                  <p className="text-xs text-stone-400 font-mono uppercase tracking-wider">
+                  <p
+                    className="text-xs font-mono uppercase tracking-wider"
+                    style={{ color: 'var(--theme-text-secondary, #a8a29e)' }}
+                  >
                     All verified neighborhood reports under municipal investigation
                   </p>
                 </div>
 
-                <div className="relative w-full sm:w-80">
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search by ticket #CV, street, ward..."
-                    className="w-full pl-9 pr-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white text-xs focus:outline-none focus:ring-2 focus:ring-yellow-400 font-mono"
-                  />
-                  <Search className="w-4 h-4 text-stone-400 absolute left-3 top-3.5" />
+                <div className="flex items-center gap-2">
+                  {/* Reload button */}
+                  <button
+                    onClick={fetchIssues}
+                    disabled={isLoadingIssues}
+                    className="p-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-stone-300 hover:text-white transition-all disabled:opacity-50"
+                    title="Reload issues"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isLoadingIssues ? 'animate-spin' : ''}`} />
+                  </button>
+
+                  <div className="relative w-full sm:w-80">
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search by ticket #CV, street, ward..."
+                      className="w-full pl-9 pr-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white text-xs focus:outline-none focus:ring-2 focus:ring-yellow-400 font-mono"
+                    />
+                    <Search className="w-4 h-4 text-stone-400 absolute left-3 top-3.5" />
+                  </div>
                 </div>
               </div>
 
-              {/* Status Filters */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-2">
-                {[
-                  { id: 'all', label: 'All Dispatches' },
-                  { id: 'reported', label: 'Reported' },
-                  { id: 'in_progress', label: 'In Progress' },
-                  { id: 'completed', label: 'Completed' },
-                  { id: 'citizen_verified', label: 'Verified' },
-                  { id: 'reopened', label: 'Reopened' },
-                ].map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => {
-                      sound.playTick();
-                      setSelectedStatus(s.id);
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold uppercase tracking-wider whitespace-nowrap transition-all ${
-                      selectedStatus === s.id
-                        ? 'bg-yellow-400 text-black shadow-md'
-                        : 'bg-white/10 text-stone-300 hover:bg-white/20 hover:text-white'
-                    }`}
-                  >
-                    {s.label}
-                  </button>
-                ))}
+              {/* Filter Tabs: Category & Status */}
+              <div className="space-y-2">
+                {/* Category Filters */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                  {CATEGORIES.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => {
+                        sound.playTick();
+                        setSelectedCategory(c.id);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold uppercase tracking-wider whitespace-nowrap transition-all ${
+                        selectedCategory === c.id
+                          ? 'bg-amber-400 text-black shadow-md'
+                          : 'bg-white/10 text-stone-300 hover:bg-white/20 hover:text-white'
+                      }`}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Status Filters */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-2">
+                  {[
+                    { id: 'all', label: 'All Dispatches' },
+                    { id: 'reported', label: 'Reported' },
+                    { id: 'under_review', label: 'Under Review' },
+                    { id: 'in_progress', label: 'In Progress' },
+                    { id: 'completed', label: 'Completed' },
+                    { id: 'citizen_verified', label: 'Verified' },
+                    { id: 'reopened', label: 'Reopened' },
+                  ].map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => {
+                        sound.playTick();
+                        setSelectedStatus(s.id);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold uppercase tracking-wider whitespace-nowrap transition-all ${
+                        selectedStatus === s.id
+                          ? 'bg-yellow-400 text-black shadow-md'
+                          : 'bg-white/10 text-stone-300 hover:bg-white/20 hover:text-white'
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {/* Grid of Issue Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredIssues.map((issue) => (
-                  <IssueCard
-                    key={issue.id}
-                    issue={issue}
-                    userRole={userRole}
-                    onUpvote={handleUpvote}
-                    onOpenTimeline={handleOpenTimeline}
-                    onVerify={(issue, isResolved) =>
-                      setVerifyIssueData({ issue, isVerifyingResolved: isResolved })
-                    }
-                    onAdminAction={setAdminActionIssue}
-                  />
-                ))}
-              </div>
+              {/* Error state */}
+              {issuesError && (
+                <div className="p-3.5 rounded-2xl bg-rose-950/60 border border-rose-800 text-rose-200 text-xs font-mono flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                  <span>{issuesError}</span>
+                  <button onClick={fetchIssues} className="ml-auto text-rose-300 hover:text-rose-100 underline">
+                    Retry
+                  </button>
+                </div>
+              )}
+
+              {/* Loading state */}
+              {isLoadingIssues && (
+                <div className="flex items-center gap-2 px-1 text-stone-400 text-xs font-mono">
+                  <Loader2 className="w-4 h-4 animate-spin text-yellow-400" />
+                  <span>Loading live dispatches from PostgreSQL...</span>
+                </div>
+              )}
+
+              {/* Grid */}
+              {!isLoadingIssues && filteredIssues.length === 0 ? (
+                <div className="py-16 flex flex-col items-center gap-4 text-stone-500">
+                  <Search className="w-10 h-10 text-stone-600" />
+                  <p className="text-sm font-mono">No issues match your filters.</p>
+                  <button
+                    onClick={() => { setSelectedCategory('all'); setSelectedStatus('all'); setSearchQuery(''); }}
+                    className="text-xs text-amber-400 hover:underline font-mono"
+                  >
+                    Clear filters
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredIssues.map((issue) => (
+                    <IssueCard
+                      key={issue.id}
+                      issue={issue}
+                      userRole={userRole}
+                      onUpvote={handleUpvote}
+                      onOpenTimeline={handleOpenTimeline}
+                      onVerify={(issue, isResolved) =>
+                        setVerifyIssueData({ issue, isVerifyingResolved: isResolved })
+                      }
+                      onAdminAction={setAdminActionIssue}
+                    />
+                  ))}
+                </div>
+              )}
             </section>
           </div>
         )}
 
-        {/* Tab 2: Interactive Ward Map Radar */}
+        {/* ── TAB: MAP ────────────────────────────────────────────────────────── */}
         {activeTab === 'map' && (
           <section className="space-y-6 pt-6 animate-in fade-in duration-200">
             <div className="flex items-center justify-between">
@@ -413,14 +529,11 @@ export default function App() {
                   Ward GIS Radar
                 </h2>
                 <p className="text-xs text-stone-400 font-mono uppercase tracking-wider">
-                  Live geospatial plotting of civic reports across municipal districts
+                  Live geospatial plotting · OpenStreetMap · {issues.length} active dispatches
                 </p>
               </div>
               <button
-                onClick={() => {
-                  if (!isAuthenticated) setIsAuthModalOpen(true);
-                  else setIsReportModalOpen(true);
-                }}
+                onClick={openReportModal}
                 className="px-4 py-2 rounded-xl bg-yellow-400 text-black text-xs font-mono font-black uppercase tracking-wider flex items-center gap-1.5"
               >
                 <Plus className="w-4 h-4 stroke-[3]" />
@@ -428,21 +541,57 @@ export default function App() {
               </button>
             </div>
 
-            <InteractiveMapPreview
+            <LeafletMap
               issues={issues}
               onSelectIssue={handleOpenTimeline}
-              onOpenReportModal={() => {
-                if (!isAuthenticated) setIsAuthModalOpen(true);
-                else setIsReportModalOpen(true);
-              }}
+              onOpenReportModal={openReportModal}
             />
           </section>
         )}
 
-        {/* Tab 3: Resolution Ledger & Analytics */}
+        {/* ── TAB: ANALYTICS ──────────────────────────────────────────────────── */}
         {activeTab === 'analytics' && (
           <section className="pt-6">
             <StatsDashboard issues={issues} />
+          </section>
+        )}
+
+        {/* ── TAB: MUNICIPAL DASHBOARD ────────────────────────────────────────── */}
+        {['municipal', 'departments'].includes(activeTab) && (
+          <section className="pt-6">
+            {['MUNICIPAL', 'ADMIN'].includes(userRole) ? (
+              <MunicipalDashboard
+                onOpenTimeline={handleOpenTimeline}
+                onUpdateStatus={(issue) => setAdminActionIssue(issue)}
+                initialSection={activeTab === 'departments' ? 'departments' : 'overview'}
+              />
+            ) : (
+              <div className="py-24 flex flex-col items-center gap-4 text-stone-500">
+                <AlertCircle className="w-12 h-12 text-rose-500" />
+                <p className="text-sm font-mono font-bold text-stone-300">Access Denied</p>
+                <p className="text-xs text-stone-500 font-mono">Municipal Operations requires MUNICIPAL or ADMIN role.</p>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ── TAB: ADMIN DASHBOARD ────────────────────────────────────────────── */}
+        {['admin', 'users', 'duplicates'].includes(activeTab) && (
+          <section className="pt-6">
+            {userRole === 'ADMIN' ? (
+              <AdminDashboard
+                onOpenTimeline={handleOpenTimeline}
+                onUpdateStatus={(issue) => setAdminActionIssue(issue)}
+                showNotification={showNotification}
+                initialSection={activeTab === 'users' ? 'users' : activeTab === 'duplicates' ? 'duplicates' : 'overview'}
+              />
+            ) : (
+              <div className="py-24 flex flex-col items-center gap-4 text-stone-500">
+                <AlertCircle className="w-12 h-12 text-rose-500" />
+                <p className="text-sm font-mono font-bold text-stone-300">Access Denied</p>
+                <p className="text-xs text-stone-500 font-mono">Admin Panel requires ADMIN role.</p>
+              </div>
+            )}
           </section>
         )}
       </main>
@@ -451,24 +600,24 @@ export default function App() {
       <footer className="w-full border-t border-white/10 bg-black/90 py-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-mono text-stone-400">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-white uppercase">CIVICVOICE // THE MUNICIPAL SYMPHONY</span>
+            <span className="font-bold text-white uppercase">CIVICVOICE // VADODARA MUNICIPAL CORPORATION</span>
           </div>
           <div className="flex items-center gap-4 uppercase tracking-widest text-[11px]">
-            <span>NY Phil Gustavo Theatrical Staging</span>
+            <span>PostgreSQL · Node.js · React · Leaflet/OSM</span>
             <span>•</span>
-            <span>Direct Citizen Conductor</span>
+            <span>Zero-cost Civic Tech · Gujarat, India</span>
           </div>
         </div>
       </footer>
 
-      {/* Real Authentication Modal */}
+      {/* ── MODALS ──────────────────────────────────────────────────────────────── */}
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
-        onAuthSuccess={() => sound.playSlotDrop()}
+        onAuthSuccess={() => safePlaySound('playSlotDrop')}
       />
 
-      {/* Toast Notification Banner */}
+      {/* Toast Notification */}
       {notification && (
         <div
           className={`fixed top-24 right-6 z-50 max-w-md p-4 rounded-2xl shadow-2xl backdrop-blur-md border text-xs font-mono flex items-start gap-3 animate-in slide-in-from-top-4 duration-200 ${
@@ -497,15 +646,15 @@ export default function App() {
         </div>
       )}
 
-      {/* Loading Timeline Indicator */}
+      {/* Timeline Loading */}
       {isLoadingTimeline && (
         <div className="fixed bottom-6 right-6 z-50 px-4 py-2.5 rounded-2xl bg-black/90 border border-yellow-400/40 text-yellow-300 text-xs font-mono flex items-center gap-2 shadow-2xl backdrop-blur-md animate-in fade-in">
           <Loader2 className="w-4 h-4 animate-spin text-yellow-400" />
-          <span>Retrieving official dispatch updates from server...</span>
+          <span>Retrieving official dispatch updates...</span>
         </div>
       )}
 
-      {/* Modals */}
+      {/* Issue Report Modal */}
       {isReportModalOpen && (
         <IssueReportModal
           onClose={() => setIsReportModalOpen(false)}
@@ -514,6 +663,7 @@ export default function App() {
         />
       )}
 
+      {/* Timeline Modal */}
       {timelineIssue && (
         <IssueTimelineModal
           issue={timelineIssue}
@@ -526,14 +676,16 @@ export default function App() {
         />
       )}
 
+      {/* Admin/Municipal Action Modal */}
       {adminActionIssue && (
         <AdminActionModal
           issue={adminActionIssue}
           onClose={() => setAdminActionIssue(null)}
-          onUpdateStatus={handleUpdateStatus}
+          onUpdateStatus={handleUpdateStatusFromModal}
         />
       )}
 
+      {/* Citizen Verify Modal */}
       {verifyIssueData && (
         <CitizenVerifyModal
           issue={verifyIssueData.issue}

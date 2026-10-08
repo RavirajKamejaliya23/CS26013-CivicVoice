@@ -128,6 +128,47 @@ export const api = {
       const res = await apiRequest('/issues/stats');
       return res.data;
     },
+    getSimilar: async ({ category, latitude, longitude, title = '', description = '', radius } = {}) => {
+      const params = new URLSearchParams();
+      if (category) params.append('category', category);
+      if (latitude) params.append('latitude', latitude);
+      if (longitude) params.append('longitude', longitude);
+      if (radius) params.append('radius', radius);
+      if (title) params.append('title', title);
+      if (description) params.append('description', description);
+      const res = await apiRequest(`/issues/similar?${params.toString()}`);
+      return res.data?.similar || [];
+    },
+    joinCanonical: async (id) => {
+      const res = await apiRequest(`/issues/${id}/join`, {
+        method: 'POST',
+      });
+      return res.data;
+    },
+    markDuplicate: async (duplicateId, canonicalId) => {
+      const res = await apiRequest(`/issues/${duplicateId}/mark-duplicate`, {
+        method: 'PATCH',
+        body: { canonicalId },
+      });
+      return res.data;
+    },
+    unmarkDuplicate: async (duplicateId) => {
+      const res = await apiRequest(`/issues/${duplicateId}/unmark-duplicate`, {
+        method: 'PATCH',
+      });
+      return res.data;
+    },
+    reportForModeration: async (id, { reason, details }) => {
+      const res = await apiRequest(`/issues/${id}/report`, {
+        method: 'POST',
+        body: { reason, details },
+      });
+      return res.data;
+    },
+    delete: async (id) => {
+      const res = await apiRequest(`/issues/${id}`, { method: 'DELETE' });
+      return res.data;
+    },
   },
 
   // Municipal & Admin
@@ -135,6 +176,15 @@ export const api = {
     getOverview: async () => {
       const res = await apiRequest('/municipal/overview');
       return res.data;
+    },
+    getIssues: async ({ category, status, search } = {}) => {
+      const params = new URLSearchParams();
+      if (category && category !== 'all') params.append('category', category);
+      if (status && status !== 'all') params.append('status', status);
+      if (search && search.trim() !== '') params.append('search', search.trim());
+      const queryStr = params.toString() ? `?${params.toString()}` : '';
+      const res = await apiRequest(`/municipal/issues${queryStr}`);
+      return res.data?.issues || [];
     },
   },
   admin: {
@@ -152,6 +202,15 @@ export const api = {
     getOverview: async () => {
       const res = await apiRequest('/admin/overview');
       return res.data;
+    },
+    getIssues: async ({ category, status, search } = {}) => {
+      const params = new URLSearchParams();
+      if (category && category !== 'all') params.append('category', category);
+      if (status && status !== 'all') params.append('status', status);
+      if (search && search.trim() !== '') params.append('search', search.trim());
+      const queryStr = params.toString() ? `?${params.toString()}` : '';
+      const res = await apiRequest(`/admin/issues${queryStr}`);
+      return res.data?.issues || [];
     },
   },
 };
