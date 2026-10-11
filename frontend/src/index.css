@@ -2,23 +2,35 @@
 
 @layer base {
   :root {
-    --theme-bg: #080808;
-    --theme-bg-gradient: radial-gradient(ellipse at 50% 15%, #1c1c1c 0%, #0a0a0a 55%, #000000 100%);
-    --theme-surface: #141414;
-    --theme-surface-secondary: #1e1e1e;
-    --theme-card-bg: #141414;
-    --theme-card-border: rgba(255, 255, 255, 0.14);
-    --theme-text-primary: #ffffff;
-    --theme-text-secondary: #a3a3a3;
-    --theme-text-muted: #737373;
-    --theme-heading: #ffffff;
-    --theme-accent: #ffdd00;
-    --theme-accent-hover: #e6c700;
-    --theme-accent-contrast: #000000;
-    --theme-pill-bg: rgba(255, 221, 0, 0.12);
-    --theme-border: rgba(255, 221, 0, 0.35);
-    --theme-hero-glow: rgba(255, 221, 0, 0.2);
-    --theme-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.85);
+    --theme-bg: #FAF8F1;
+    --theme-bg-gradient: linear-gradient(180deg, #FAF8F1 0%, #F5F0E3 100%);
+    --theme-surface: #FFFFFF;
+    --theme-surface-secondary: #F5F0E3;
+    --theme-card-bg: #FFFFFF;
+    --theme-card-border: #E7E3D8;
+    --theme-text-primary: #22231F;
+    --theme-text-secondary: #686B65;
+    --theme-text-muted: #787367;
+    --theme-heading: #22231F;
+    --theme-accent: #E9B928;
+    --theme-accent-hover: #D5A313;
+    --theme-accent-contrast: #22231F;
+    --theme-pill-bg: #F5F0E3;
+    --theme-border: #E7E3D8;
+    --theme-hero-glow: rgba(233, 185, 40, 0.12);
+    --theme-shadow: 0 4px 20px -2px rgba(34, 35, 31, 0.05);
+    --theme-success-bg: #EAF5EC;
+    --theme-success-text: #1E4620;
+    --theme-success-border: #BCE2C5;
+    --theme-warning-bg: #FEF9EE;
+    --theme-warning-text: #78350F;
+    --theme-warning-border: #FDE68A;
+    --theme-error-bg: #FDF2F2;
+    --theme-error-text: #7F1D1D;
+    --theme-error-border: #FECACA;
+    --theme-info-bg: #EFF6FF;
+    --theme-info-text: #1E3A8A;
+    --theme-info-border: #BFDBFE;
   }
 
   body {
@@ -52,6 +64,21 @@
 .font-editorial-heading {
   font-family: 'Syne', sans-serif;
   letter-spacing: -0.02em;
+}
+
+/* Clarimol-inspired ambient multi-hue gradient backdrop */
+.clarimol-ambient-backdrop {
+  background: radial-gradient(circle at 12% 18%, rgba(56, 189, 248, 0.26) 0%, transparent 45%),
+              radial-gradient(circle at 86% 16%, rgba(132, 204, 22, 0.22) 0%, transparent 40%),
+              radial-gradient(circle at 48% 85%, rgba(233, 185, 40, 0.25) 0%, transparent 52%),
+              radial-gradient(circle at 92% 78%, rgba(59, 130, 246, 0.20) 0%, transparent 45%);
+}
+
+.clarimol-hero-card {
+  background: #FFFFFF;
+  border: 1px solid #E7E3D8;
+  border-radius: 28px;
+  box-shadow: 0 24px 48px -12px rgba(34, 35, 31, 0.08);
 }
 
 /* Custom Scrollbar */
@@ -118,3 +145,60 @@
 .animate-waveform-3 { animation: wavePulse 1.5s ease-in-out infinite 0.4s; }
 .animate-waveform-4 { animation: wavePulse 1.1s ease-in-out infinite 0.1s; }
 .animate-waveform-5 { animation: wavePulse 1.3s ease-in-out infinite 0.3s; }
+
+/* Interactive CivicVoice Leaflet Map Popups & Pins */
+.civic-report-leaflet-popup .leaflet-popup-content-wrapper {
+  background: #ffffff !important;
+  color: #1c1917 !important;
+  border-radius: 18px !important;
+  box-shadow: 0 20px 30px -10px rgba(0, 0, 0, 0.35), 0 10px 15px -5px rgba(0, 0, 0, 0.2) !important;
+  border: 1px solid #e7e5e4 !important;
+  padding: 10px 8px 8px 8px !important;
+}
+
+.civic-report-leaflet-popup .leaflet-popup-content {
+  margin: 4px 6px !important;
+  line-height: 1.4 !important;
+}
+
+.civic-report-leaflet-popup .leaflet-popup-tip {
+  background: #ffffff !important;
+  border: 1px solid #e7e5e4 !important;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+}
+
+.civic-report-leaflet-popup a.leaflet-popup-close-button {
+  top: 10px !important;
+  right: 10px !important;
+  color: #78716c !important;
+  font: 16px/16px monospace !important;
+  font-weight: 700 !important;
+  padding: 2px !important;
+  width: 22px !important;
+  height: 22px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 9999px !important;
+  background: #f5f5f4 !important;
+  border: 1px solid #e7e5e4 !important;
+  transition: all 0.15s ease !important;
+}
+
+.civic-report-leaflet-popup a.leaflet-popup-close-button:hover {
+  color: #1c1917 !important;
+  background: #e7e5e4 !important;
+  transform: scale(1.05) !important;
+}
+
+/* Pulsing selection animation for map pins */
+@keyframes pinSelectedPulse {
+  0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.6), 0 4px 14px rgba(0,0,0,0.5); }
+  70% { box-shadow: 0 0 0 9px rgba(245, 158, 11, 0), 0 4px 14px rgba(0,0,0,0.5); }
+  100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0), 0 4px 14px rgba(0,0,0,0.5); }
+}
+
+.civic-marker-selected {
+  animation: pinSelectedPulse 1.8s infinite !important;
+  border-color: #f59e0b !important;
+}
