@@ -2,9 +2,92 @@
 // Guaranteed high contrast (WCAG AAA/AA) across all five color schemes.
 
 export const THEMES = {
+  lightYellow: {
+    id: 'lightYellow',
+    name: 'Civic Warm Ivory & Gold',
+    subtitle: 'Warm ivory background, soft cream cards, deep charcoal typography and civic golden yellow accents',
+    previewColor: '#FAF8F1',
+    previewBorder: '#E9B928',
+    styles: {
+      '--theme-bg': '#FAF8F1',
+      '--theme-bg-gradient': 'linear-gradient(180deg, #FAF8F1 0%, #F5F0E3 100%)',
+      '--theme-surface': '#FFFFFF',
+      '--theme-surface-secondary': '#F5F0E3',
+      '--theme-card-bg': '#FFFFFF',
+      '--theme-card-border': '#E7E3D8',
+      '--theme-text-primary': '#22231F', // Deep charcoal (WCAG AAA)
+      '--theme-text-secondary': '#686B65', // Muted slate (WCAG AA)
+      '--theme-text-muted': '#787367',
+      '--theme-heading': '#22231F',
+      '--theme-accent': '#E9B928', // Civic golden yellow
+      '--theme-accent-hover': '#D5A313', // Deeper gold
+      '--theme-accent-contrast': '#22231F', // High contrast dark text on gold button
+      '--theme-pill-bg': '#F5F0E3',
+      '--theme-border': '#E7E3D8',
+      '--theme-hero-glow': 'rgba(233, 185, 40, 0.12)',
+      '--theme-shadow': '0 4px 20px -2px rgba(34, 35, 31, 0.05)',
+      '--theme-success-bg': '#EAF5EC',
+      '--theme-success-text': '#1E4620',
+      '--theme-success-border': '#BCE2C5',
+      '--theme-warning-bg': '#FEF9EE',
+      '--theme-warning-text': '#78350F',
+      '--theme-warning-border': '#FDE68A',
+      '--theme-error-bg': '#FDF2F2',
+      '--theme-error-text': '#7F1D1D',
+      '--theme-error-border': '#FECACA',
+      '--theme-info-bg': '#EFF6FF',
+      '--theme-info-text': '#1E3A8A',
+      '--theme-info-border': '#BFDBFE',
+    },
+    heroBgClass: 'from-[#FAF8F1] via-[#F5F0E3] to-[#FAF8F1]',
+    cardBorderClass: 'border-[#E7E3D8]',
+    badgeClass: 'bg-[#E9B928] text-[#22231F] border-[#D5A313] font-semibold',
+    isDark: false
+  },
+
+  civicNavy: {
+    id: 'civicNavy',
+    name: 'Deep Navy',
+    subtitle: 'Restrained municipal deep navy, clean neutral background & high contrast text',
+    previewColor: '#1e3a8a',
+    previewBorder: '#0284c7',
+    styles: {
+      '--theme-bg': '#f8fafc',
+      '--theme-bg-gradient': 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)',
+      '--theme-surface': '#ffffff',
+      '--theme-surface-secondary': '#f1f5f9',
+      '--theme-card-bg': '#ffffff',
+      '--theme-card-border': '#cbd5e1',
+      '--theme-text-primary': '#0f172a',
+      '--theme-text-secondary': '#334155',
+      '--theme-text-muted': '#64748b',
+      '--theme-heading': '#0f172a',
+      '--theme-accent': '#1e3a8a',
+      '--theme-accent-hover': '#1e40af',
+      '--theme-accent-contrast': '#ffffff',
+      '--theme-pill-bg': '#eff6ff',
+      '--theme-border': '#cbd5e1',
+      '--theme-hero-glow': 'rgba(30, 58, 138, 0.06)',
+      '--theme-success-bg': '#EAF5EC',
+      '--theme-success-text': '#1E4620',
+      '--theme-success-border': '#BCE2C5',
+      '--theme-warning-bg': '#FEF9EE',
+      '--theme-warning-text': '#78350F',
+      '--theme-warning-border': '#FDE68A',
+      '--theme-error-bg': '#FDF2F2',
+      '--theme-error-text': '#7F1D1D',
+      '--theme-error-border': '#FECACA',
+    },
+    heroBgClass: 'from-blue-900 via-slate-900 to-slate-900',
+    cardBorderClass: 'border-slate-200',
+    badgeClass: 'bg-blue-900 text-white border-blue-950 font-semibold',
+    isDark: false
+  },
+
   gustavoStage: {
     id: 'gustavoStage',
     name: 'NY Phil Gustavo Stage',
+
     subtitle: 'High-contrast dark stage, cadmium yellow & electric accents',
     previewColor: '#ffdd00',
     previewBorder: '#ffffff',
