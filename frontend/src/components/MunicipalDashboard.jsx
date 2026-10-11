@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Shield, BarChart3, Clock, CheckCircle2, AlertTriangle, RefreshCw,
   Search, Filter, ArrowUpRight, Loader2, X, ChevronDown, Building2,
-  FileCheck, TrendingUp, RotateCcw, Eye, Edit3, MapPin
+  FileCheck, TrendingUp, RotateCcw, Eye, Edit3, MapPin, Layers,
+  Users, UserPlus, Mail, ShieldAlert, Copy
 } from 'lucide-react';
 import api from '../services/api';
 import { STATUS_CONFIG, CATEGORIES } from '../data/mockIssues';
@@ -20,6 +21,28 @@ const STATUS_OPTIONS = [
   { id: 'reopened', label: '7. Reopened Work' },
 ];
 
+/**
+ * Safely format officer identifiers whether returned as numeric SERIAL, UUID, or string.
+ * Converts to string prior to slicing and distinguishes valid IDs from missing identifiers.
+ */
+export const formatOfficerId = (officer) => {
+  const rawId = officer?.id ?? officer?.user_id ?? officer?.userId ?? officer?.user?.id;
+  if (rawId === null || rawId === undefined || String(rawId).trim() === '') {
+    return {
+      isValid: false,
+      display: 'Missing ID',
+      full: null,
+    };
+  }
+  const idStr = String(rawId).trim();
+  const short = idStr.length > 8 ? `${idStr.slice(0, 8)}...` : idStr;
+  return {
+    isValid: true,
+    display: short,
+    full: idStr,
+  };
+};
+
 export default function MunicipalDashboard({ onOpenTimeline, onUpdateStatus, initialSection = 'overview' }) {
   const { user } = useAuth();
   const [activeView, setActiveView] = useState(initialSection === 'departments' ? 'departments' : 'queue');
@@ -35,9 +58,39 @@ export default function MunicipalDashboard({ onOpenTimeline, onUpdateStatus, ini
   // Dedicated modal for Municipal Progress Notes
   const [selectedIssueForProgress, setSelectedIssueForProgress] = useState(null);
 
+  // Staff Management State
+  const [staffList, setStaffList] = useState([]);
+  const [isLoadingStaff, setIsLoadingStaff] = useState(false);
+  const [staffError, setStaffError] = useState(null);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [inviteFormData, setInviteFormData] = useState({
+    name: '',
+    email: '',
+    department: 'Department of Public Works',
+    municipal_role: 'OFFICER',
+  });
+  const [isInviting, setIsInviting] = useState(false);
+  const [inviteFeedback, setInviteFeedback] = useState(null);
+
+  // Duplicate Linking State for Municipal Officers
+  const [duplicateModal, setDuplicateModal] = useState({
+    isOpen: false,
+    issue: null,
+    canonicalId: '',
+    error: '',
+    isSubmitting: false,
+  });
+
+  const canInviteStaff = Boolean(
+    user?.role === 'ADMIN' ||
+    (user?.role === 'MUNICIPAL' && (user?.municipal_role === 'ADMIN' || user?.municipalRole === 'ADMIN'))
+  );
+
   useEffect(() => {
     if (initialSection === 'departments') {
       setActiveView('departments');
+    } else if (initialSection === 'overview') {
+      setActiveView('queue');
     }
   }, [initialSection]);
 
@@ -69,14 +122,69 @@ export default function MunicipalDashboard({ onOpenTimeline, onUpdateStatus, ini
     }
   }, [statusFilter, categoryFilter, searchQuery]);
 
+  const loadStaff = useCallback(async () => {
+    setIsLoadingStaff(true);
+    setStaffError(null);
+    try {
+      const data = await api.municipalStaff.getStaff(user?.municipality_id);
+      setStaffList(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.warn('Could not load staff list:', err.message);
+      setStaffError(err.message || 'Failed to load municipal squad roster.');
+    } finally {
+      setIsLoadingStaff(false);
+    }
+  }, [user?.municipality_id]);
+
   useEffect(() => {
     loadOverview();
   }, [loadOverview]);
 
   useEffect(() => {
+    if (activeView === 'staff') {
+      loadStaff();
+    }
+  }, [activeView, loadStaff]);
+
+  useEffect(() => {
     const timer = setTimeout(loadIssues, 250);
     return () => clearTimeout(timer);
   }, [loadIssues]);
+
+  const handleInviteOfficer = async (e) => {
+    e.preventDefault();
+    if (!canInviteStaff) {
+      setInviteFeedback({
+        type: 'error',
+        message: 'Access denied: Only municipal administrators or platform administrators can authorize squad members.'
+      });
+      return;
+    }
+    setIsInviting(true);
+    setInviteFeedback(null);
+    try {
+      await api.municipalStaff.inviteStaff({
+        ...inviteFormData,
+        municipalityId: user?.municipality_id,
+      });
+      setInviteFeedback({ type: 'success', message: 'Staff member successfully registered and authorized.' });
+      setInviteFormData({
+        name: '',
+        email: '',
+        department: 'Department of Public Works',
+        municipal_role: 'OFFICER',
+      });
+      loadStaff();
+      setTimeout(() => {
+        setIsInviteModalOpen(false);
+        setInviteFeedback(null);
+      }, 1500);
+    } catch (err) {
+      setInviteFeedback({ type: 'error', message: err.message || 'Failed to authorize staff member.' });
+    } finally {
+      setIsInviting(false);
+    }
+  };
 
   const handleProgressSuccess = (updatedIssue) => {
     if (!updatedIssue) return;
@@ -86,6 +194,42 @@ export default function MunicipalDashboard({ onOpenTimeline, onUpdateStatus, ini
     loadOverview();
     if (onUpdateStatus) {
       onUpdateStatus(updatedIssue);
+    }
+  };
+
+  const handleMarkDuplicate = async () => {
+    if (!duplicateModal.issue || !duplicateModal.canonicalId.trim()) return;
+    const dupId = duplicateModal.issue.id;
+    const canId = duplicateModal.canonicalId.trim();
+
+    if (dupId === canId) {
+      setDuplicateModal((prev) => ({ ...prev, error: 'A complaint cannot be marked as a duplicate of itself.' }));
+      return;
+    }
+
+    setDuplicateModal((prev) => ({ ...prev, isSubmitting: true, error: '' }));
+    try {
+      await api.issues.markDuplicate(dupId, canId);
+      setDuplicateModal({ isOpen: false, issue: null, canonicalId: '', error: '', isSubmitting: false });
+      loadIssues();
+      loadOverview();
+    } catch (err) {
+      setDuplicateModal((prev) => ({
+        ...prev,
+        isSubmitting: false,
+        error: err.message || 'Failed to mark as duplicate.',
+      }));
+    }
+  };
+
+  const handleUnlinkDuplicate = async (dupId) => {
+    if (!window.confirm(`Unlink complaint ${dupId} from duplicate status and restore as independent complaint?`)) return;
+    try {
+      await api.issues.unmarkDuplicate(dupId);
+      loadIssues();
+      loadOverview();
+    } catch (err) {
+      setError(err.message || 'Failed to unlink duplicate.');
     }
   };
 
@@ -151,9 +295,11 @@ export default function MunicipalDashboard({ onOpenTimeline, onUpdateStatus, ini
       {/* ── Top Operations Banner ────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-3xl bg-stone-900 border border-purple-800/40 shadow-xl backdrop-blur-md">
         <div>
-          <div className="flex items-center gap-2 text-xs font-mono font-bold uppercase tracking-wider text-purple-400 mb-1">
-            <Shield className="w-4 h-4 text-purple-400" />
-            <span>MUNICIPAL OPERATIONS COMMAND</span>
+          <div className="flex items-center gap-2 text-xs font-mono font-bold uppercase tracking-wider text-teal-400 mb-1">
+            <Building2 className="w-4 h-4 text-teal-400" />
+            <span>{user?.municipality_name || 'Vadodara Municipal Corporation'}</span>
+            <span className="text-stone-500">•</span>
+            <span className="text-purple-400">OPERATIONS COMMAND</span>
           </div>
           <h2 className="text-2xl font-black text-white">
             {user?.name || 'Municipal Officer'}
@@ -164,7 +310,7 @@ export default function MunicipalDashboard({ onOpenTimeline, onUpdateStatus, ini
             </span>
             <span>·</span>
             <span className="px-2 py-0.5 rounded bg-purple-900/50 text-purple-200 border border-purple-700/50 text-[10px] uppercase font-bold">
-              Authorized Dispatcher
+              {user?.municipal_role === 'ADMIN' ? 'Municipal Administrator' : 'Municipal Officer'}
             </span>
           </div>
         </div>
@@ -173,11 +319,12 @@ export default function MunicipalDashboard({ onOpenTimeline, onUpdateStatus, ini
           onClick={() => {
             loadOverview();
             loadIssues();
+            if (activeView === 'staff') loadStaff();
           }}
-          disabled={isLoadingIssues || isLoadingOverview}
+          disabled={isLoadingIssues || isLoadingOverview || isLoadingStaff}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-mono font-bold uppercase tracking-wider transition-all shadow-md active:scale-95 disabled:opacity-50"
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${isLoadingIssues ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-3.5 h-3.5 ${isLoadingIssues || isLoadingStaff ? 'animate-spin' : ''}`} />
           <span>Refresh Queue</span>
         </button>
       </div>
@@ -218,8 +365,8 @@ export default function MunicipalDashboard({ onOpenTimeline, onUpdateStatus, ini
         ))}
       </div>
 
-      {/* ── Subtab View Switcher: Operational Queue | Department Workload | Ward-wise Distribution ── */}
-      <div className="flex items-center gap-2 p-1 rounded-2xl bg-stone-900 border border-stone-800 w-fit">
+      {/* ── Subtab View Switcher: Operational Queue | Department Workload | Ward-wise Distribution | Officers & Squad ── */}
+      <div className="flex flex-wrap items-center gap-2 p-1 rounded-2xl bg-stone-900 border border-stone-800 w-fit">
         <button
           type="button"
           onClick={() => setActiveView('queue')}
@@ -255,6 +402,18 @@ export default function MunicipalDashboard({ onOpenTimeline, onUpdateStatus, ini
         >
           <MapPin className="w-3.5 h-3.5" />
           <span>Ward-wise Complaints</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveView('staff')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all ${
+            activeView === 'staff'
+              ? 'bg-purple-600 text-white shadow-md'
+              : 'text-stone-400 hover:text-white hover:bg-stone-800'
+          }`}
+        >
+          <Users className="w-3.5 h-3.5" />
+          <span>Officers & Squad</span>
         </button>
       </div>
 
@@ -412,6 +571,36 @@ export default function MunicipalDashboard({ onOpenTimeline, onUpdateStatus, ini
                         {/* Actions */}
                         <td className="px-4 py-3.5 text-right whitespace-nowrap">
                           <div className="flex items-center justify-end gap-2">
+                            {/* Duplicate management actions for municipal officers */}
+                            {issue.duplicateOf ? (
+                              <button
+                                type="button"
+                                onClick={() => handleUnlinkDuplicate(issue.id)}
+                                className="px-2.5 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 hover:text-white text-[11px] font-bold transition-all border border-stone-700 flex items-center gap-1"
+                                title={`Unlink from canonical issue #${issue.duplicateOf}`}
+                              >
+                                <span>Unlink Duplicate</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setDuplicateModal({
+                                    isOpen: true,
+                                    issue,
+                                    canonicalId: '',
+                                    error: '',
+                                    isSubmitting: false,
+                                  })
+                                }
+                                className="px-2.5 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 hover:text-white text-[11px] font-bold transition-all flex items-center gap-1 border border-stone-700"
+                                title="Mark as duplicate of another canonical complaint in your jurisdiction"
+                              >
+                                <Copy className="w-3 h-3 text-amber-400" />
+                                <span className="hidden sm:inline">Mark Duplicate</span>
+                              </button>
+                            )}
+
                             <button
                               type="button"
                               onClick={() => onOpenTimeline(issue)}
@@ -454,7 +643,7 @@ export default function MunicipalDashboard({ onOpenTimeline, onUpdateStatus, ini
             <div>
               <h3 className="text-lg font-bold text-white font-mono uppercase tracking-tight flex items-center gap-2">
                 <Layers className="w-5 h-5 text-purple-400" />
-                <span>Vadodara Municipal Department Workloads</span>
+                <span>Municipal Department Workloads</span>
               </h3>
               <p className="text-xs text-stone-400 font-mono mt-0.5">
                 Active municipal work orders assigned across specialized engineering wings
@@ -518,14 +707,14 @@ export default function MunicipalDashboard({ onOpenTimeline, onUpdateStatus, ini
             <div>
               <h3 className="text-lg font-bold text-white font-mono uppercase tracking-tight flex items-center gap-2">
                 <MapPin className="w-5 h-5 text-amber-400" />
-                <span>Ward-wise Complaint Distribution (Vadodara)</span>
+                <span>Locality & Ward-wise Complaint Distribution</span>
               </h3>
               <p className="text-xs text-stone-400 font-mono mt-0.5">
                 Geographic volume and unresolved ticket load across municipal administrative wards
               </p>
             </div>
             <span className="text-xs font-mono text-amber-300 bg-amber-900/30 px-3 py-1.5 rounded-xl border border-amber-700/40 font-bold">
-              Vadodara Municipal Corporation
+              Responsible Civic Authority
             </span>
           </div>
 
@@ -573,6 +762,385 @@ export default function MunicipalDashboard({ onOpenTimeline, onUpdateStatus, ini
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* ── VIEW 4: Officers & Squad Management ─────────────────────────────── */}
+      {activeView === 'staff' && (
+        <div className="rounded-3xl bg-stone-900 border border-stone-800 shadow-xl p-6 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-bold text-white font-mono uppercase tracking-tight flex items-center gap-2">
+                <Users className="w-5 h-5 text-purple-400" />
+                <span>Municipal Staff & Field Squad</span>
+              </h3>
+              <p className="text-xs text-stone-400 font-mono mt-0.5">
+                Authorized officers and squad personnel assigned to {user?.municipality_name || 'your municipal corporation'}
+              </p>
+            </div>
+
+            {canInviteStaff ? (
+              <button
+                onClick={() => {
+                  setInviteFeedback(null);
+                  setIsInviteModalOpen(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-mono font-bold uppercase tracking-wider transition-all shadow-md active:scale-95"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>Authorize / Invite Officer</span>
+              </button>
+            ) : (
+              <div
+                title="Only Municipal Administrators can authorize new officers."
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-stone-800/80 border border-stone-700/60 text-stone-400 text-xs font-mono select-none"
+              >
+                <Shield className="w-3.5 h-3.5 text-stone-500" />
+                <span>Admin Privileges Required to Invite</span>
+              </div>
+            )}
+          </div>
+
+          {isLoadingStaff ? (
+            <div className="py-12 flex flex-col items-center justify-center gap-2 text-stone-400">
+              <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
+              <span className="text-xs font-mono">Loading municipal officers...</span>
+            </div>
+          ) : staffError ? (
+            <div className="py-10 px-4 flex flex-col items-center justify-center gap-3 text-center border border-rose-900/50 rounded-2xl bg-rose-950/20">
+              <AlertTriangle className="w-6 h-6 text-rose-400" />
+              <div className="text-xs font-mono text-rose-200">{staffError}</div>
+              <button
+                onClick={loadStaff}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-300 text-xs font-mono transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Retry Loading</span>
+              </button>
+            </div>
+          ) : staffList.length === 0 ? (
+            <div className="py-12 text-center text-stone-500 font-mono text-xs">
+              No additional officers assigned to this municipality yet.{' '}
+              {canInviteStaff
+                ? 'Click "Authorize / Invite Officer" to add team members.'
+                : 'Contact a municipal administrator to assign squad members.'}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs font-mono">
+                <thead>
+                  <tr className="border-b border-stone-800 text-stone-400 uppercase tracking-wider">
+                    <th className="py-3 px-4">Officer</th>
+                    <th className="py-3 px-4">Email</th>
+                    <th className="py-3 px-4">Department</th>
+                    <th className="py-3 px-4">Municipal Role</th>
+                    <th className="py-3 px-4">Authorized Since</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-800/60">
+                  {staffList.map((officer, index) => {
+                    const idMeta = formatOfficerId(officer);
+                    const officerKey = idMeta.isValid ? `officer-${idMeta.full}` : `officer-row-${index}`;
+                    const officerName = officer?.name || officer?.user?.name || 'Unnamed Officer';
+                    const officerEmail = officer?.email || officer?.user?.email || 'No email provided';
+                    const officerDept = officer?.department || officer?.department_name || 'Department of Public Works';
+                    const rawRole = (officer?.municipal_role || officer?.municipalRole || officer?.role || 'OFFICER').toUpperCase();
+                    const isOfficerAdmin = rawRole === 'ADMIN';
+                    const createdAtRaw = officer?.created_at || officer?.createdAt;
+                    let authorizedSince = 'Active';
+                    if (createdAtRaw) {
+                      const d = new Date(createdAtRaw);
+                      if (!isNaN(d.getTime())) {
+                        authorizedSince = d.toLocaleDateString();
+                      }
+                    }
+
+                    return (
+                      <tr key={officerKey} className="hover:bg-stone-800/30 transition-colors">
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 flex items-center justify-center font-bold text-xs uppercase border border-purple-500/30">
+                              {officerName.charAt(0) || 'O'}
+                            </div>
+                            <div>
+                              <div className="font-bold text-white">{officerName}</div>
+                              {idMeta.isValid ? (
+                                <div className="text-[10px] text-stone-500">ID: #{idMeta.display}</div>
+                              ) : (
+                                <div className="text-[10px] text-amber-400/90 font-medium italic">ID Unassigned</div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4 text-stone-300">{officerEmail}</td>
+                        <td className="py-3.5 px-4">
+                          <span className="px-2 py-0.5 rounded bg-stone-800 text-stone-300 border border-stone-700 text-[11px]">
+                            {officerDept}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold border ${
+                            isOfficerAdmin
+                              ? 'bg-purple-900/40 text-purple-300 border-purple-700/50'
+                              : 'bg-teal-900/40 text-teal-300 border-teal-700/50'
+                          }`}>
+                            {isOfficerAdmin ? 'Municipal Admin' : 'Field Officer'}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-stone-400">
+                          {authorizedSince}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Invite Officer Modal ────────────────────────────────────────── */}
+      {isInviteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-md rounded-3xl bg-stone-900 border border-stone-700 shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-800 pb-3">
+              <div className="flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-purple-400" />
+                <h3 className="text-base font-bold text-white font-mono">Authorize Officer</h3>
+              </div>
+              <button
+                onClick={() => {
+                  setIsInviteModalOpen(false);
+                  setInviteFeedback(null);
+                }}
+                className="p-1 hover:text-white text-stone-400"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {!canInviteStaff ? (
+              <div className="p-4 rounded-2xl bg-amber-950/50 border border-amber-800 text-amber-200 text-xs font-mono space-y-2">
+                <div className="flex items-center gap-2 font-bold">
+                  <ShieldAlert className="w-4 h-4 text-amber-400" />
+                  <span>Administrator Authorization Required</span>
+                </div>
+                <p className="text-amber-300/80">
+                  Only designated Municipal Administrators or Platform Administrators have authorization to onboard squad members.
+                </p>
+                <div className="pt-2 flex justify-end">
+                  <button
+                    onClick={() => setIsInviteModalOpen(false)}
+                    className="px-3 py-1.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-white text-xs"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {inviteFeedback && (
+                  <div className={`p-3 rounded-xl text-xs font-mono ${
+                    inviteFeedback.type === 'success'
+                      ? 'bg-emerald-950/80 border border-emerald-800 text-emerald-300'
+                      : 'bg-rose-950/80 border border-rose-800 text-rose-300'
+                  }`}>
+                    {inviteFeedback.message}
+                  </div>
+                )}
+
+                <form onSubmit={handleInviteOfficer} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-mono text-stone-400 mb-1">Full Name *</label>
+                    <input
+                      type="text"
+                      required
+                      value={inviteFormData.name}
+                      onChange={(e) => setInviteFormData({ ...inviteFormData, name: e.target.value })}
+                      placeholder="e.g. Ramesh Patel"
+                      className="w-full px-3 py-2 rounded-xl bg-stone-800 border border-stone-700 text-white text-xs font-mono focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-mono text-stone-400 mb-1">Official Email Address *</label>
+                    <input
+                      type="email"
+                      required
+                      value={inviteFormData.email}
+                      onChange={(e) => setInviteFormData({ ...inviteFormData, email: e.target.value })}
+                      placeholder="e.g. ramesh@vmc.gov.in"
+                      className="w-full px-3 py-2 rounded-xl bg-stone-800 border border-stone-700 text-white text-xs font-mono focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-mono text-stone-400 mb-1">Assigned Department *</label>
+                    <select
+                      value={inviteFormData.department}
+                      onChange={(e) => setInviteFormData({ ...inviteFormData, department: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-stone-800 border border-stone-700 text-stone-200 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    >
+                      <option value="Department of Public Works">Department of Public Works</option>
+                      <option value="Roads & Bridges Department">Roads & Bridges Department</option>
+                      <option value="Water Supply & Drainage">Water Supply & Drainage</option>
+                      <option value="Solid Waste Management">Solid Waste Management</option>
+                      <option value="Street Lighting & Electrical">Street Lighting & Electrical</option>
+                      <option value="Parks & Public Gardens">Parks & Public Gardens</option>
+                      <option value="Town Planning & Encroachment">Town Planning & Encroachment</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-mono text-stone-400 mb-1">Authority Level *</label>
+                    <select
+                      value={inviteFormData.municipal_role}
+                      onChange={(e) => setInviteFormData({ ...inviteFormData, municipal_role: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-stone-800 border border-stone-700 text-stone-200 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    >
+                      <option value="OFFICER">Municipal Officer (Triage & Updates)</option>
+                      <option value="ADMIN">Municipal Administrator (Team Management & Operations)</option>
+                    </select>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsInviteModalOpen(false)}
+                      className="px-4 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-300 text-xs font-mono"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isInviting}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-mono font-bold shadow-md disabled:opacity-50"
+                    >
+                      {isInviting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                      <span>Authorize Officer</span>
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Municipal Duplicate Linking Modal ────────────────────────────── */}
+      {duplicateModal.isOpen && duplicateModal.issue && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
+          <div
+            className="fixed inset-0"
+            onClick={() =>
+              setDuplicateModal({ isOpen: false, issue: null, canonicalId: '', error: '', isSubmitting: false })
+            }
+          />
+          <div className="relative w-full max-w-lg rounded-3xl bg-stone-900 border border-stone-800 shadow-2xl z-10 overflow-hidden text-stone-100 p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center">
+                  <Copy className="w-4 h-4 text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold font-mono text-white">Mark Complaint as Duplicate</h3>
+                  <p className="text-[11px] text-stone-400 font-mono">
+                    Consolidate under a canonical complaint in your jurisdiction
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setDuplicateModal({ isOpen: false, issue: null, canonicalId: '', error: '', isSubmitting: false })
+                }
+                className="p-1 hover:text-white text-stone-400"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Duplicate issue details */}
+            <div className="p-3.5 rounded-2xl bg-stone-950/60 border border-stone-800 space-y-1">
+              <div className="text-[10px] font-mono uppercase text-amber-400 font-bold">Duplicate Report (Child):</div>
+              <div className="font-mono text-xs font-bold text-white">{duplicateModal.issue.id}</div>
+              <div className="text-xs text-stone-300 font-medium">{duplicateModal.issue.title}</div>
+            </div>
+
+            {/* Canonical issue selector */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-mono text-stone-300 font-bold">
+                Select Canonical Master Complaint:
+              </label>
+              <select
+                value={duplicateModal.canonicalId}
+                onChange={(e) => setDuplicateModal((prev) => ({ ...prev, canonicalId: e.target.value, error: '' }))}
+                className="w-full px-3 py-2.5 rounded-xl bg-stone-800 border border-stone-700 text-white text-xs font-mono focus:outline-none focus:ring-2 focus:ring-amber-500"
+              >
+                <option value="">-- Choose Canonical Complaint --</option>
+                {issues
+                  .filter((i) => i.id !== duplicateModal.issue.id && !i.duplicateOf)
+                  .map((can) => (
+                    <option key={can.id} value={can.id}>
+                      {can.id} — {can.title.length > 50 ? can.title.slice(0, 50) + '...' : can.title}
+                    </option>
+                  ))}
+              </select>
+              <p className="text-[11px] text-stone-400">
+                Or enter ticket ID manually:
+              </p>
+              <input
+                type="text"
+                value={duplicateModal.canonicalId}
+                onChange={(e) => setDuplicateModal((prev) => ({ ...prev, canonicalId: e.target.value, error: '' }))}
+                placeholder="e.g. CV-VAD-2026-1001"
+                className="w-full px-3 py-2 rounded-xl bg-stone-800 border border-stone-700 text-white text-xs font-mono focus:outline-none focus:ring-2 focus:ring-amber-500"
+              />
+            </div>
+
+            {/* Merge Confirmation Banner */}
+            {duplicateModal.canonicalId.trim() && (
+              <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-800/60 text-amber-200 text-xs space-y-1">
+                <div className="font-bold flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Confirmation:</span>
+                </div>
+                <p className="text-[11px] leading-relaxed">
+                  Link <strong>{duplicateModal.issue.id}</strong> as duplicate of{' '}
+                  <strong>{duplicateModal.canonicalId.trim()}</strong>? Both original records, photos, and histories
+                  will be safely preserved. Unique supporters will be transferred without inflation.
+                </p>
+              </div>
+            )}
+
+            {duplicateModal.error && (
+              <div className="p-3 rounded-xl bg-rose-950/80 border border-rose-800 text-rose-200 text-xs font-mono">
+                {duplicateModal.error}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-stone-800">
+              <button
+                type="button"
+                onClick={() =>
+                  setDuplicateModal({ isOpen: false, issue: null, canonicalId: '', error: '', isSubmitting: false })
+                }
+                className="px-4 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-300 text-xs font-mono"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleMarkDuplicate}
+                disabled={duplicateModal.isSubmitting || !duplicateModal.canonicalId.trim()}
+                className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-mono font-bold shadow-md disabled:opacity-50"
+              >
+                {duplicateModal.isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>Confirm & Mark Duplicate</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
