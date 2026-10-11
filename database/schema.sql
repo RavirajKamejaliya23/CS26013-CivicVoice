@@ -90,6 +90,7 @@ CREATE TABLE issues (
     title VARCHAR(255) NOT NULL,
     description TEXT NOT NULL,
     category_id VARCHAR(50) NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,
+    custom_category VARCHAR(255) DEFAULT NULL,
     status VARCHAR(30) NOT NULL DEFAULT 'reported' CHECK (
         status IN (
             'reported',
@@ -216,3 +217,102 @@ CREATE TABLE citizen_verifications (
 );
 
 CREATE INDEX idx_verifications_issue ON citizen_verifications(issue_id);
+
+-- ============================================================================
+-- 12. MUNICIPAL BODIES TABLE (Multi-Municipality Architecture)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS municipal_bodies (
+    id VARCHAR(50) PRIMARY KEY,
+    code VARCHAR(50) UNIQUE NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    state VARCHAR(100) NOT NULL DEFAULT 'Gujarat',
+    city VARCHAR(100) NOT NULL,
+    authority_type VARCHAR(50) NOT NULL DEFAULT 'MUNICIPAL_CORPORATION',
+    official_website VARCHAR(255),
+    contact_email VARCHAR(255),
+    contact_phone VARCHAR(50),
+    jurisdiction_bounds JSONB,
+    status VARCHAR(30) NOT NULL DEFAULT 'active',
+    logo_url TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================================================
+-- 13. MUNICIPAL APPLICATIONS TABLE (Public Onboarding & Verification)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS municipal_applications (
+    id SERIAL PRIMARY KEY,
+    application_no VARCHAR(50) UNIQUE NOT NULL,
+    applicant_name VARCHAR(150) NOT NULL,
+    applicant_email VARCHAR(255) NOT NULL,
+    applicant_role VARCHAR(100) NOT NULL,
+    applicant_phone VARCHAR(50),
+    municipality_name VARCHAR(255) NOT NULL,
+    authority_type VARCHAR(50) NOT NULL,
+    city VARCHAR(100) NOT NULL,
+    state VARCHAR(100) NOT NULL,
+    official_website VARCHAR(255),
+    office_address TEXT,
+    jurisdiction_details TEXT,
+    supporting_documents TEXT,
+    declaration_confirmed BOOLEAN DEFAULT TRUE,
+    status VARCHAR(30) DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'UNDER_REVIEW', 'APPROVED', 'REJECTED', 'NEEDS_INFORMATION')),
+    admin_notes TEXT,
+    rejection_reason TEXT,
+    reviewed_by INT REFERENCES users(id),
+    reviewed_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================================================
+-- 14. MUNICIPAL APPLICATION REVIEWS TABLE (Admin Review Audit Trail)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS municipal_application_reviews (
+    id SERIAL PRIMARY KEY,
+    application_id INT NOT NULL REFERENCES municipal_applications(id) ON DELETE CASCADE,
+    reviewer_id INT REFERENCES users(id),
+    reviewer_name VARCHAR(150),
+    from_status VARCHAR(30),
+    to_status VARCHAR(30),
+    action VARCHAR(50),
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================================================
+-- 15. MUNICIPAL INVITATIONS TABLE (Secure Admin Invitation Flow)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS municipal_invitations (
+    id SERIAL PRIMARY KEY,
+    municipality_id VARCHAR(50) REFERENCES municipal_bodies(id) ON DELETE CASCADE,
+    application_id INT REFERENCES municipal_applications(id) ON DELETE SET NULL,
+    email VARCHAR(255) NOT NULL,
+    invited_name VARCHAR(150),
+    role VARCHAR(50) DEFAULT 'MUNICIPAL',
+    municipal_role VARCHAR(50) DEFAULT 'ADMIN',
+    department VARCHAR(150),
+    invitation_token VARCHAR(255) UNIQUE NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    accepted_at TIMESTAMP WITH TIME ZONE,
+    created_by INT REFERENCES users(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================================================
+-- 16. AUDIT LOGS TABLE (Platform & Sensitive Action Ledger)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(id),
+    user_email VARCHAR(255),
+    user_role VARCHAR(50),
+    action VARCHAR(100) NOT NULL,
+    resource_type VARCHAR(50),
+    resource_id VARCHAR(100),
+    details JSONB,
+    ip_address VARCHAR(50),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
