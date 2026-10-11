@@ -33,7 +33,7 @@ export default function IssueTimelineModal({ issue, onClose, onVerify, userRole,
         {/* Modal Top Bar */}
         <div className="p-6 border-b border-stone-200 dark:border-stone-800 flex items-start justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2.5 mb-1.5">
+            <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
               <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-stone-100 dark:bg-stone-800 text-stone-800 dark:text-stone-200 border border-stone-300 dark:border-stone-700">
                 {issue.id}
               </span>
@@ -41,6 +41,12 @@ export default function IssueTimelineModal({ issue, onClose, onVerify, userRole,
                 <span className={`w-2 h-2 rounded-full ${statusInfo.dot}`} />
                 <span>{statusInfo.label}</span>
               </span>
+              {issue.municipality_name && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold font-mono bg-teal-500/10 text-teal-800 dark:text-teal-300 border border-teal-500/30">
+                  <Shield className="w-3 h-3 text-teal-600" />
+                  <span>{issue.municipality_name}</span>
+                </span>
+              )}
             </div>
             <h2 className="text-xl font-bold text-stone-900 dark:text-stone-100 leading-snug">
               {issue.title}
@@ -58,6 +64,19 @@ export default function IssueTimelineModal({ issue, onClose, onVerify, userRole,
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Authority Not Onboarded Alert Banner */}
+        {issue.jurisdiction_status === 'AUTHORITY_NOT_ONBOARDED' && (
+          <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-800 text-xs font-mono text-amber-900 dark:text-amber-200 flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+            <div>
+              <strong className="font-bold">Jurisdiction Notice:</strong> The report's geographic coordinates are outside currently active municipal corporations.
+              <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80 mt-0.5">
+                CivicVoice has indexed this issue in the civic ledger. It will automatically route to the corresponding local authority as soon as their municipal onboarding application is approved.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Lifecycle Stepper Bar */}
         <div className="px-6 py-4 bg-stone-50 dark:bg-stone-950/40 border-b border-stone-200 dark:border-stone-800">
@@ -176,6 +195,17 @@ export default function IssueTimelineModal({ issue, onClose, onVerify, userRole,
                     <div className="text-xs text-stone-600 dark:text-stone-300 leading-relaxed">
                       {step.note}
                     </div>
+
+                    {step.evidenceImage && (
+                      <div className="mt-2 rounded-xl overflow-hidden border border-stone-200 dark:border-stone-700 max-w-sm">
+                        <img
+                          src={step.evidenceImage}
+                          alt="Work progress evidence"
+                          className="w-full h-40 object-cover"
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                        />
+                      </div>
+                    )}
 
                     <div className="flex items-center gap-2 pt-1 text-[11px] text-stone-500 dark:text-stone-400 font-mono">
                       <User className="w-3 h-3" />
