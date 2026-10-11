@@ -48,6 +48,12 @@ export function AuthProvider({ children }) {
     return data.user;
   };
 
+  const loginWithGoogle = async (credential) => {
+    const data = await api.auth.googleLogin(credential);
+    setUser(data.user);
+    return data.user;
+  };
+
   const logout = async () => {
     try {
       await api.auth.logout();
@@ -74,6 +80,7 @@ export function AuthProvider({ children }) {
         isLoading,
         login,
         register,
+        loginWithGoogle,
         logout,
         hasRole,
       }}
@@ -81,6 +88,7 @@ export function AuthProvider({ children }) {
       {children}
     </AuthContext.Provider>
   );
+
 }
 
 export function useAuth() {
