@@ -8,6 +8,8 @@ import authRoutes from './routes/authRoutes.js';
 import issueRoutes from './routes/issueRoutes.js';
 import municipalRoutes from './routes/municipalRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
+import municipalityRoutes from './routes/municipalityRoutes.js';
+import analyticsRoutes from './routes/analyticsRoutes.js';
 import { notFoundHandler, errorHandler } from './middleware/errorMiddleware.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -40,6 +42,8 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/issues', issueRoutes);
 app.use('/api/municipal', municipalRoutes);
+app.use('/api/municipalities', municipalityRoutes);
+app.use('/api/analytics', analyticsRoutes);
 app.use('/api/admin', adminRoutes);
 
 // Catch-all 404 handler

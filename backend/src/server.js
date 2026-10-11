@@ -1,6 +1,7 @@
 import app from './app.js';
 import { config } from './config/env.js';
 import { testConnection } from './config/database.js';
+import { runMultiMunicipalityMigration } from './config/migrate_multi_municipality.js';
 
 const startServer = async () => {
   const PORT = config.port;
@@ -10,6 +11,11 @@ const startServer = async () => {
   if (dbCheck.ok) {
     console.log(`[DATABASE] Successfully connected to PostgreSQL at ${config.databaseUrl ? 'DATABASE_URL' : `${config.dbHost}:${config.dbPort}/${config.dbName}`}`);
     console.log(`[DATABASE] Server time: ${dbCheck.timestamp}`);
+    try {
+      await runMultiMunicipalityMigration();
+    } catch (migErr) {
+      console.warn('[DATABASE] Migration notice:', migErr.message);
+    }
   } else {
     console.warn(`[DATABASE WARNING] Could not reach PostgreSQL: ${dbCheck.error}`);
     console.warn(`[DATABASE WARNING] Ensure PostgreSQL is running and .env has valid credentials.`);
