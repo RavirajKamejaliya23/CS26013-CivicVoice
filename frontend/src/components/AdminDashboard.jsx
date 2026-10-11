@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Shield, Users, BarChart3, AlertTriangle, CheckCircle2, RefreshCw,
-  Search, Loader2, X, Trash2, Copy, ChevronDown, Eye, Settings
+  Search, Loader2, X, Trash2, Copy, ChevronDown, Eye, Settings, Building2, ExternalLink
 } from 'lucide-react';
 import api from '../services/api';
 import { STATUS_CONFIG } from '../data/mockIssues';
 import { useAuth } from '../context/AuthContext';
+import AdminUserProfileModal from './AdminUserProfileModal';
+import AdminMunicipalApplicationModal from './AdminMunicipalApplicationModal';
 
 const ROLE_COLORS = {
   CITIZEN: 'text-yellow-300 bg-yellow-500/15 border-yellow-500/30',
@@ -28,6 +30,12 @@ export default function AdminDashboard({ onOpenTimeline, onUpdateStatus, showNot
   const [deletingIssueId, setDeletingIssueId] = useState(null);
   const [unlinkingId, setUnlinkingId] = useState(null);
   const [markDupState, setMarkDupState] = useState({ issueId: '', canonicalId: '' });
+  const [selectedUserForProfile, setSelectedUserForProfile] = useState(null);
+  const [applications, setApplications] = useState([]);
+  const [selectedApplication, setSelectedApplication] = useState(null);
+  const [appStatusFilter, setAppStatusFilter] = useState('ALL');
+  const [municipalities, setMunicipalities] = useState([]);
+  const [selectedMunicipalityFilter, setSelectedMunicipalityFilter] = useState('all');
 
   useEffect(() => {
     if (initialSection) {
@@ -39,14 +47,18 @@ export default function AdminDashboard({ onOpenTimeline, onUpdateStatus, showNot
     setIsLoading(true);
     setError(null);
     try {
-      const [overviewData, usersData, issuesData] = await Promise.all([
+      const [overviewData, usersData, issuesData, appsData, munData] = await Promise.all([
         api.admin.getOverview(),
         api.admin.getUsers(),
         api.admin.getIssues(),
+        api.admin.getApplications(),
+        api.municipalities.getAll(),
       ]);
       setOverview(overviewData);
       setUsers(usersData || []);
       setIssues(issuesData || []);
+      setApplications(appsData || []);
+      setMunicipalities(munData || []);
     } catch (err) {
       setError(err.message || 'Failed to load admin data.');
     } finally {
@@ -113,7 +125,10 @@ export default function AdminDashboard({ onOpenTimeline, onUpdateStatus, showNot
     }
   };
 
+  const selectedMunObj = municipalities.find(m => m.id === selectedMunicipalityFilter);
+
   const filteredUsers = users.filter(u => {
+    if (selectedMunicipalityFilter !== 'all' && u.municipality_id !== selectedMunicipalityFilter) return false;
     if (roleFilter !== 'all' && u.role !== roleFilter) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -123,6 +138,7 @@ export default function AdminDashboard({ onOpenTimeline, onUpdateStatus, showNot
   });
 
   const filteredIssues = issues.filter(i => {
+    if (selectedMunicipalityFilter !== 'all' && (i.municipalityId || i.municipality_id) !== selectedMunicipalityFilter) return false;
     if (statusFilter !== 'all' && i.status !== statusFilter) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -131,14 +147,28 @@ export default function AdminDashboard({ onOpenTimeline, onUpdateStatus, showNot
     return true;
   });
 
+  // Municipality-scoped metrics for overview panel
+  const munIssues = selectedMunicipalityFilter === 'all'
+    ? issues
+    : issues.filter(i => (i.municipalityId || i.municipality_id) === selectedMunicipalityFilter);
+  const munUsers = selectedMunicipalityFilter === 'all'
+    ? users
+    : users.filter(u => u.municipality_id === selectedMunicipalityFilter);
+  const munOfficersCount = munUsers.filter(u => u.role === 'MUNICIPAL').length;
+  const munOpenCount = munIssues.filter(i => !['completed', 'citizen_verified'].includes(i.status)).length;
+  const munResolvedCount = munIssues.filter(i => ['completed', 'citizen_verified'].includes(i.status)).length;
+
   // Duplicates & Canonical groupings
   const duplicateIssues = issues.filter(i => Boolean(i.duplicateOf));
   const canonicalIssuesWithDuplicates = issues.filter(i => (i.mergedCount || 0) > 0);
+
+  const pendingAppsCount = applications.filter(a => a.status === 'PENDING').length;
 
   const navSections = [
     { id: 'overview', label: 'System Overview', icon: BarChart3 },
     { id: 'users', label: 'User Management', icon: Users },
     { id: 'issues', label: 'Complaint Moderation', icon: Settings },
+    { id: 'applications', label: `Municipal Onboarding${pendingAppsCount > 0 ? ` (${pendingAppsCount})` : ''}`, icon: Building2 },
     { id: 'duplicates', label: `Duplicates & Merges (${duplicateIssues.length})`, icon: Copy },
   ];
 
@@ -180,6 +210,48 @@ export default function AdminDashboard({ onOpenTimeline, onUpdateStatus, showNot
         </div>
       )}
 
+      {/* Municipality Filter Bar for Demo Access */}
+      <div className="p-4 rounded-3xl bg-stone-900/90 border border-stone-700/60 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs font-mono">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+            <Building2 className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="font-bold text-stone-200 uppercase tracking-wide">
+              View as municipality (Municipality filter)
+            </div>
+            <div className="text-[11px] text-stone-400">
+              {selectedMunicipalityFilter === 'all'
+                ? 'Viewing all municipalities platform-wide · Admin privileges active'
+                : `Filtered view: ${selectedMunObj?.name || selectedMunicipalityFilter} · Admin privileges preserved`}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <select
+            value={selectedMunicipalityFilter}
+            onChange={(e) => setSelectedMunicipalityFilter(e.target.value)}
+            className="px-3.5 py-2 rounded-xl bg-stone-800 border border-amber-500/50 text-amber-200 text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
+          >
+            <option value="all">All Municipalities (Platform Wide)</option>
+            {municipalities.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name} ({m.city}, {m.state})
+              </option>
+            ))}
+          </select>
+          {selectedMunicipalityFilter !== 'all' && (
+            <button
+              onClick={() => setSelectedMunicipalityFilter('all')}
+              className="px-3 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-300 text-xs font-mono font-bold border border-stone-600 transition-colors"
+            >
+              Clear Filter
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Section Nav */}
       <div className="flex items-center p-1 gap-1 rounded-2xl bg-white/5 border border-stone-700/40 w-fit">
         {navSections.map(sec => {
@@ -212,6 +284,107 @@ export default function AdminDashboard({ onOpenTimeline, onUpdateStatus, showNot
           {/* ── OVERVIEW SECTION ── */}
           {activeSection === 'overview' && overview && (
             <div className="space-y-6">
+
+              {/* Dedicated Municipality Overview Panel */}
+              {selectedMunicipalityFilter !== 'all' && selectedMunObj ? (
+                <div className="p-6 rounded-3xl bg-stone-900 border border-amber-500/40 space-y-5 animate-in fade-in duration-200">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-800 pb-4">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                          {selectedMunObj.status === 'active' ? 'VERIFIED · ACTIVE' : selectedMunObj.status.toUpperCase()}
+                        </span>
+                        <span className="text-stone-500 text-xs font-mono">•</span>
+                        <span className="text-xs font-mono text-amber-400 font-bold uppercase">
+                          {selectedMunObj.authorityType?.replace('_', ' ') || 'MUNICIPAL CORPORATION'}
+                        </span>
+                      </div>
+                      <h3 className="text-xl font-bold text-white">
+                        {selectedMunObj.name}
+                      </h3>
+                      <p className="text-xs text-stone-400 font-mono mt-0.5">
+                        Jurisdiction: {selectedMunObj.city}, {selectedMunObj.state} · Code: {selectedMunObj.code}
+                      </p>
+                    </div>
+
+                    <div className="p-3 rounded-2xl bg-stone-800/80 border border-stone-700 text-xs font-mono space-y-1">
+                      <div className="text-[10px] uppercase text-stone-400 font-bold">Presenter Demo Credentials</div>
+                      <div className="text-stone-200">
+                        Email: <strong className="text-amber-300">{selectedMunObj.id === 'amc' ? 'municipal.amc@civicvoice.org' : 'municipal@civicvoice.org'}</strong>
+                      </div>
+                      <div className="text-stone-200">
+                        Password: <span className="font-mono text-stone-400">Municipal@123</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Municipality Metrics Grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    <div className="p-4 rounded-2xl bg-white/5 border border-stone-800">
+                      <div className="text-2xl font-black font-mono text-white">{munIssues.length}</div>
+                      <div className="text-[10px] font-mono text-stone-400 uppercase tracking-wider mt-1">Total Genuine Reports</div>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-white/5 border border-stone-800">
+                      <div className="text-2xl font-black font-mono text-purple-400">{munOfficersCount}</div>
+                      <div className="text-[10px] font-mono text-stone-400 uppercase tracking-wider mt-1">Authorized Staff</div>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-white/5 border border-stone-800">
+                      <div className="text-2xl font-black font-mono text-amber-400">{munOpenCount}</div>
+                      <div className="text-[10px] font-mono text-stone-400 uppercase tracking-wider mt-1">Open Complaints</div>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-white/5 border border-stone-800">
+                      <div className="text-2xl font-black font-mono text-emerald-400">{munResolvedCount}</div>
+                      <div className="text-[10px] font-mono text-stone-400 uppercase tracking-wider mt-1">Resolved Complaints</div>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-white/5 border border-stone-800 col-span-2 sm:col-span-1">
+                      <div className="text-xs font-bold font-mono text-teal-300 mt-1">ACTIVE GEO-FENCE</div>
+                      <div className="text-[10px] font-mono text-stone-400 uppercase tracking-wider mt-1.5">Jurisdiction Coverage</div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* Multi-Municipality Directory Cards for Platform Admin */
+                <div className="p-5 rounded-3xl bg-stone-900/60 border border-stone-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-stone-400">
+                      Configured Municipal Bodies ({municipalities.length})
+                    </h3>
+                    <span className="text-[11px] font-mono text-stone-500">
+                      Click any corporation to isolate overview & reports
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {municipalities.map((m) => (
+                      <button
+                        type="button"
+                        key={m.id}
+                        onClick={() => setSelectedMunicipalityFilter(m.id)}
+                        className="p-4 rounded-2xl bg-stone-800/60 hover:bg-stone-800 border border-stone-700/60 hover:border-amber-500/60 transition-all text-left flex flex-col justify-between group"
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <span className="font-mono text-xs font-bold text-amber-400 uppercase">
+                            {m.code}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                            {m.status === 'active' ? 'VERIFIED' : m.status}
+                          </span>
+                        </div>
+                        <div className="font-bold text-white text-sm group-hover:text-amber-200 transition-colors">
+                          {m.name}
+                        </div>
+                        <div className="text-xs text-stone-400 font-mono mt-0.5">
+                          {m.city}, {m.state}
+                        </div>
+                        <div className="mt-3 pt-2.5 border-t border-stone-700/60 flex items-center justify-between text-[11px] font-mono text-stone-400">
+                          <span>{m.issuesCount || 0} Reports</span>
+                          <span>{m.officersCount || 0} Staff</span>
+                          <span className="text-amber-400 font-bold group-hover:underline">Filter &rarr;</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               {/* User Stats */}
               <div>
                 <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-stone-400 mb-3">System Roles & Personnel</h3>
@@ -321,13 +494,20 @@ export default function AdminDashboard({ onOpenTimeline, onUpdateStatus, showNot
                     </thead>
                     <tbody>
                       {filteredUsers.map(u => (
-                        <tr key={u.id} className="border-b border-stone-800/60 hover:bg-white/3 transition-colors">
+                        <tr
+                          key={u.id}
+                          onClick={() => setSelectedUserForProfile(u.id)}
+                          className="border-b border-stone-800/60 hover:bg-white/5 cursor-pointer transition-colors group"
+                        >
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
                               <img src={u.avatar} alt={u.name} className="w-7 h-7 rounded-full object-cover border border-stone-700" />
                               <div>
-                                <div className="font-bold text-stone-200">{u.name}</div>
-                                <div className="text-stone-500 text-[10px]">ID: {u.id}</div>
+                                <div className="font-bold text-stone-200 group-hover:text-amber-400 transition-colors flex items-center gap-1">
+                                  <span>{u.name}</span>
+                                  <span className="text-[10px] text-stone-500 opacity-0 group-hover:opacity-100 transition-opacity">↗</span>
+                                </div>
+                                <div className="text-stone-500 text-[10px]">ID: {u.id} · View Profile</div>
                               </div>
                             </div>
                           </td>
@@ -340,7 +520,7 @@ export default function AdminDashboard({ onOpenTimeline, onUpdateStatus, showNot
                               {u.role}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-right">
+                          <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                             {updatingUserId === u.id ? (
                               <Loader2 className="w-4 h-4 animate-spin text-amber-400 ml-auto" />
                             ) : (
@@ -728,8 +908,140 @@ export default function AdminDashboard({ onOpenTimeline, onUpdateStatus, showNot
               </div>
             </div>
           )}
+
+          {/* ── SECTION: MUNICIPAL APPLICATIONS ────────────────────────────────────── */}
+          {activeSection === 'applications' && (
+            <div className="space-y-6">
+              {/* Header and status filters */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-3xl bg-white/5 border border-stone-700/40">
+                <div>
+                  <h3 className="text-sm font-mono font-bold uppercase tracking-wider text-stone-200">
+                    Municipal Authority Verification Queue
+                  </h3>
+                  <p className="text-xs text-stone-400 font-mono">
+                    Review government onboarding requests, verify authority credentials, and activate municipal scopes
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                  {['ALL', 'PENDING', 'UNDER_REVIEW', 'APPROVED', 'REJECTED', 'NEEDS_INFORMATION'].map((st) => (
+                    <button
+                      key={st}
+                      onClick={() => setAppStatusFilter(st)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold tracking-wider uppercase transition-all whitespace-nowrap ${
+                        appStatusFilter === st
+                          ? 'bg-teal-600 text-white shadow-sm'
+                          : 'bg-stone-800/80 hover:bg-stone-700 text-stone-400'
+                      }`}
+                    >
+                      {st.replace('_', ' ')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Applications Table / Cards */}
+              <div className="rounded-3xl bg-white/5 border border-stone-700/40 overflow-hidden">
+                {applications.filter(a => appStatusFilter === 'ALL' || a.status === appStatusFilter).length === 0 ? (
+                  <div className="p-12 text-center text-stone-500 text-xs font-mono space-y-2">
+                    <Building2 className="w-8 h-8 mx-auto text-stone-600 mb-2" />
+                    <div>No municipal onboarding applications found in '{appStatusFilter}' status.</div>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs font-mono">
+                      <thead>
+                        <tr className="border-b border-stone-700/40 text-stone-500 uppercase tracking-wider">
+                          <th className="text-left px-4 py-3 font-semibold">Application No</th>
+                          <th className="text-left px-4 py-3 font-semibold">Municipal Authority</th>
+                          <th className="text-left px-4 py-3 font-semibold">City & State</th>
+                          <th className="text-left px-4 py-3 font-semibold">Applicant Official</th>
+                          <th className="text-left px-4 py-3 font-semibold">Status</th>
+                          <th className="text-right px-4 py-3 font-semibold">Review</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {applications
+                          .filter(a => appStatusFilter === 'ALL' || a.status === appStatusFilter)
+                          .map((app) => (
+                            <tr
+                              key={app.id}
+                              className="border-b border-stone-800/60 hover:bg-white/5 transition-colors cursor-pointer"
+                              onClick={() => setSelectedApplication(app)}
+                            >
+                              <td className="px-4 py-3 font-bold text-teal-400">
+                                {app.applicationNo}
+                              </td>
+                              <td className="px-4 py-3 font-medium text-stone-200">
+                                <div>{app.municipalityName}</div>
+                                <div className="text-[10px] text-stone-500">{app.authorityType}</div>
+                              </td>
+                              <td className="px-4 py-3 text-stone-300">
+                                {app.city}, {app.state}
+                              </td>
+                              <td className="px-4 py-3 text-stone-300">
+                                <div className="font-semibold">{app.applicantName}</div>
+                                <div className="text-[10px] text-stone-500">{app.applicantRole} • {app.applicantEmail}</div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                                  app.status === 'APPROVED' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' :
+                                  app.status === 'REJECTED' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' :
+                                  app.status === 'UNDER_REVIEW' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40' :
+                                  app.status === 'NEEDS_INFORMATION' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40' :
+                                  'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                                }`}>
+                                  {app.status.replace('_', ' ')}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedApplication(app);
+                                  }}
+                                  className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold text-[11px] transition-all"
+                                >
+                                  Review
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </>
       )}
+
+      {/* Admin User Profile Dossier Modal */}
+      <AdminUserProfileModal
+        userId={selectedUserForProfile}
+        isOpen={Boolean(selectedUserForProfile)}
+        onClose={() => setSelectedUserForProfile(null)}
+        onOpenTimeline={onOpenTimeline}
+        onRoleUpdated={(userId, newRole) => {
+          setUsers(prev => prev.map(u => (u.id === userId ? { ...u, role: newRole } : u)));
+          showNotification({ type: 'success', message: `User #${userId} role updated to ${newRole}.` });
+        }}
+        currentAdminId={user?.id}
+      />
+
+      {/* Admin Municipal Application Modal */}
+      <AdminMunicipalApplicationModal
+        application={selectedApplication}
+        isOpen={Boolean(selectedApplication)}
+        onClose={() => setSelectedApplication(null)}
+        onUpdated={() => {
+          loadOverview();
+          setSelectedApplication(null);
+          showNotification({ type: 'success', message: 'Municipal onboarding application updated.' });
+        }}
+      />
     </div>
   );
 }
