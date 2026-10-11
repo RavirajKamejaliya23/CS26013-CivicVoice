@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as issueController from '../controllers/issueController.js';
 import { authenticateUser, authorizeRoles, optionalAuth } from '../middleware/authMiddleware.js';
+import { uploadEvidenceImage } from '../middleware/uploadMiddleware.js';
 
 const router = Router();
 
@@ -8,7 +9,9 @@ const router = Router();
 router.get('/', optionalAuth, issueController.getIssues);
 router.get('/stats', issueController.getStats);
 router.get('/similar', issueController.getSimilarIssues);
+router.get('/:id/merged', optionalAuth, issueController.getMergedIssues);
 router.get('/:id', optionalAuth, issueController.getIssueById);
+
 
 // Citizen Actions: Issue reporting, co-signing/upvoting, and community resolution verification.
 // In the civic workflow, Municipal officers review and act upon issues rather than filing dispatches.
@@ -27,28 +30,43 @@ router.patch(
   issueController.updateStatus
 );
 
+// Municipal & Admin official completion photographic evidence upload
+router.post(
+  '/:id/evidence',
+  authenticateUser,
+  authorizeRoles('MUNICIPAL', 'ADMIN'),
+  uploadEvidenceImage,
+  issueController.uploadCompletionEvidence
+);
+
 // Admin-only issue deletion / moderation
 router.delete('/:id', authenticateUser, authorizeRoles('ADMIN'), issueController.deleteIssue);
 
-// Admin-only: Mark an issue as a duplicate of another
+// Authorized Municipal & Admin: Mark an issue as duplicate of a canonical complaint
 router.patch(
   '/:id/mark-duplicate',
   authenticateUser,
-  authorizeRoles('ADMIN'),
+  authorizeRoles('MUNICIPAL', 'ADMIN'),
+  issueController.markAsDuplicate
+);
+router.post(
+  '/:id/mark-duplicate',
+  authenticateUser,
+  authorizeRoles('MUNICIPAL', 'ADMIN'),
   issueController.markAsDuplicate
 );
 
-// Admin-only: Unmark/unlink an issue from duplicate status
+// Authorized Municipal & Admin: Unmark/unlink an issue from duplicate status
 router.patch(
   '/:id/unmark-duplicate',
   authenticateUser,
-  authorizeRoles('ADMIN'),
+  authorizeRoles('MUNICIPAL', 'ADMIN'),
   issueController.unmarkAsDuplicate
 );
 router.post(
   '/:id/unmark-duplicate',
   authenticateUser,
-  authorizeRoles('ADMIN'),
+  authorizeRoles('MUNICIPAL', 'ADMIN'),
   issueController.unmarkAsDuplicate
 );
 
