@@ -1,6 +1,16 @@
 import pool, { query } from '../config/database.js';
 
-export const getAllIssues = async ({ category, status, search, userId } = {}) => {
+export const getAllIssues = async ({
+  category,
+  status,
+  search,
+  userId,
+  canonicalOnly = true,
+  reporterId = null,
+  municipalityId = null,
+  state = null,
+  city = null,
+} = {}) => {
   let whereClauses = [];
   let params = [];
   let paramIndex = 1;
@@ -15,6 +25,21 @@ export const getAllIssues = async ({ category, status, search, userId } = {}) =>
     paramIndex++;
   }
 
+  // Multi-municipality scoping
+  if (municipalityId && municipalityId !== 'all') {
+    whereClauses.push(`i.municipality_id = $${paramIndex++}`);
+    params.push(municipalityId);
+  }
+
+  // Reporter-specific lookup (e.g. My Complaints) displays both canonical and merged submissions
+  if (reporterId) {
+    whereClauses.push(`i.reported_by_id = $${paramIndex++}`);
+    params.push(reporterId);
+  } else if (canonicalOnly) {
+    // Primary citizen feed: strictly hide merged child duplicates to prevent feed clutter
+    whereClauses.push(`i.duplicate_of IS NULL`);
+  }
+
   if (category && category !== 'all') {
     whereClauses.push(`i.category_id = $${paramIndex++}`);
     params.push(category);
@@ -23,6 +48,18 @@ export const getAllIssues = async ({ category, status, search, userId } = {}) =>
   if (status && status !== 'all') {
     whereClauses.push(`i.status = $${paramIndex++}`);
     params.push(status);
+  }
+
+  if (state && state !== 'all') {
+    whereClauses.push(`(m.state ILIKE $${paramIndex} OR i.address ILIKE $${paramIndex})`);
+    params.push(`%${state.trim()}%`);
+    paramIndex++;
+  }
+
+  if (city && city !== 'all') {
+    whereClauses.push(`(m.city ILIKE $${paramIndex} OR i.address ILIKE $${paramIndex})`);
+    params.push(`%${city.trim()}%`);
+    paramIndex++;
   }
 
   if (search && search.trim() !== '') {
@@ -45,6 +82,7 @@ export const getAllIssues = async ({ category, status, search, userId } = {}) =>
       i.description,
       i.category_id AS category,
       c.name AS "categoryName",
+      i.custom_category AS "customCategory",
       i.status,
       i.address,
       i.latitude,
@@ -57,12 +95,20 @@ export const getAllIssues = async ({ category, status, search, userId } = {}) =>
       i.reporter_avatar AS "reporterAvatar",
       i.upvotes_count AS "upvotes",
       i.duplicate_of AS "duplicateOf",
+      i.municipality_id AS "municipalityId",
+      m.name AS "municipalityName",
+      m.code AS "municipalityCode",
+      m.state AS "state",
+      m.city AS "city",
+      i.jurisdiction_status AS "jurisdictionStatus",
       (SELECT COUNT(*) FROM issues d WHERE d.duplicate_of = i.id) AS "mergedCount",
+      (SELECT parent.title FROM issues parent WHERE parent.id = i.duplicate_of) AS "canonicalTitle",
       i.created_at AS "createdAt",
       i.updated_at AS "updatedAt",
       ${upvoteSelect}
     FROM issues i
     JOIN categories c ON c.id = i.category_id
+    LEFT JOIN municipal_bodies m ON m.id = i.municipality_id
     ${upvoteJoin}
     ${whereSql}
     ORDER BY i.created_at DESC;
@@ -75,7 +121,9 @@ export const getAllIssues = async ({ category, status, search, userId } = {}) =>
     title: row.title,
     description: row.description,
     category: row.category,
-    categoryName: row.categoryName,
+    categoryName: (row.category === 'other' && row.customCategory) ? row.customCategory : row.categoryName,
+    customCategory: row.customCategory || null,
+    custom_category: row.customCategory || null,
     status: row.status,
     address: row.address,
     latitude: row.latitude,
@@ -83,13 +131,27 @@ export const getAllIssues = async ({ category, status, search, userId } = {}) =>
     imageUrl: row.imageUrl,
     completionEvidenceUrl: row.completionEvidenceUrl,
     duplicateOf: row.duplicateOf || null,
+    canonicalTitle: row.canonicalTitle || null,
     mergedCount: parseInt(row.mergedCount || 0, 10),
+    reportedById: row.reportedById,
+    municipalityId: row.municipalityId || null,
+    municipality_id: row.municipalityId || null,
+    municipalityName: row.municipalityName || 'Jurisdiction Pending',
+    municipality_name: row.municipalityName || 'Jurisdiction Pending',
+    municipalityCode: row.municipalityCode || null,
+    municipality_code: row.municipalityCode || null,
+    state: row.state || null,
+    city: row.city || null,
+    municipality_state: row.state || null,
+    municipality_city: row.city || null,
+    jurisdictionStatus: row.jurisdictionStatus || 'MATCHED',
+    jurisdiction_status: row.jurisdictionStatus || 'MATCHED',
     reportedBy: {
       name: row.reporterName,
       badge: row.reporterBadge,
       avatar: row.reporterAvatar,
     },
-    reportedAt: new Date(row.createdAt).toLocaleDateString('en-US', {
+    reportedAt: new Date(row.createdAt).toLocaleDateString('en-IN', {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
@@ -98,6 +160,7 @@ export const getAllIssues = async ({ category, status, search, userId } = {}) =>
     hasUpvoted: Boolean(row.has_upvoted),
   }));
 };
+
 
 export const getIssueById = async (id, userId = null) => {
   let upvoteJoin = '';
@@ -117,6 +180,7 @@ export const getIssueById = async (id, userId = null) => {
       i.description,
       i.category_id AS category,
       c.name AS "categoryName",
+      i.custom_category AS "customCategory",
       i.status,
       i.address,
       i.latitude,
@@ -129,12 +193,19 @@ export const getIssueById = async (id, userId = null) => {
       i.reporter_avatar AS "reporterAvatar",
       i.upvotes_count AS "upvotes",
       i.duplicate_of AS "duplicateOf",
+      i.municipality_id AS "municipalityId",
+      m.name AS "municipalityName",
+      m.code AS "municipalityCode",
+      m.state AS "state",
+      m.city AS "city",
+      i.jurisdiction_status AS "jurisdictionStatus",
       (SELECT COUNT(*) FROM issues d WHERE d.duplicate_of = i.id) AS "mergedCount",
       i.created_at AS "createdAt",
       i.updated_at AS "updatedAt",
       ${upvoteSelect}
     FROM issues i
     JOIN categories c ON c.id = i.category_id
+    LEFT JOIN municipal_bodies m ON m.id = i.municipality_id
     ${upvoteJoin}
     WHERE i.id = $1
     LIMIT 1;
@@ -175,7 +246,9 @@ export const getIssueById = async (id, userId = null) => {
     title: row.title,
     description: row.description,
     category: row.category,
-    categoryName: row.categoryName,
+    categoryName: (row.category === 'other' && row.customCategory) ? row.customCategory : row.categoryName,
+    customCategory: row.customCategory || null,
+    custom_category: row.customCategory || null,
     status: row.status,
     address: row.address,
     latitude: row.latitude,
@@ -184,6 +257,18 @@ export const getIssueById = async (id, userId = null) => {
     completionEvidenceUrl: row.completionEvidenceUrl,
     duplicateOf: row.duplicateOf || null,
     mergedCount: parseInt(row.mergedCount || 0, 10),
+    municipalityId: row.municipalityId || null,
+    municipality_id: row.municipalityId || null,
+    municipalityName: row.municipalityName || 'Jurisdiction Pending',
+    municipality_name: row.municipalityName || 'Jurisdiction Pending',
+    municipalityCode: row.municipalityCode || null,
+    municipality_code: row.municipalityCode || null,
+    state: row.state || null,
+    city: row.city || null,
+    municipality_state: row.state || null,
+    municipality_city: row.city || null,
+    jurisdictionStatus: row.jurisdictionStatus || 'MATCHED',
+    jurisdiction_status: row.jurisdictionStatus || 'MATCHED',
     media: mediaRes.rows.map((m) => m.mediaUrl),
     mediaItems: mediaRes.rows,
     reportedBy: {
@@ -221,6 +306,7 @@ export const createIssue = async ({
   title,
   description,
   category,
+  customCategory = null,
   address,
   latitude = 37.7749,
   longitude = -122.4194,
@@ -230,6 +316,8 @@ export const createIssue = async ({
   reporterName,
   reporterBadge = 'Verified Citizen',
   reporterAvatar = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
+  municipalityId = null,
+  jurisdictionStatus = 'MATCHED',
 }) => {
   // Validate maximum 10 photos limit
   const photos = Array.isArray(mediaUrls) && mediaUrls.length > 0 ? mediaUrls : (imageUrl ? [imageUrl] : []);
@@ -253,11 +341,12 @@ export const createIssue = async ({
     // 2. Insert into issues table
     const issueSql = `
       INSERT INTO issues (
-        id, title, description, category_id, status, location_id, address,
+        id, title, description, category_id, custom_category, status, location_id, address,
         latitude, longitude, image_url, reported_by_id,
-        reporter_name, reporter_badge, reporter_avatar, upvotes_count
+        reporter_name, reporter_badge, reporter_avatar, upvotes_count,
+        municipality_id, jurisdiction_status
       )
-      VALUES ($1, $2, $3, $4, 'reported', $5, $6, $7, $8, $9, $10, $11, $12, $13, 1)
+      VALUES ($1, $2, $3, $4, $5, 'reported', $6, $7, $8, $9, $10, $11, $12, $13, $14, 1, $15, $16)
       RETURNING *;
     `;
     const issueRes = await client.query(issueSql, [
@@ -265,6 +354,7 @@ export const createIssue = async ({
       title,
       description,
       category,
+      customCategory,
       locationId,
       address,
       latitude,
@@ -274,6 +364,8 @@ export const createIssue = async ({
       reporterName,
       reporterBadge,
       reporterAvatar,
+      municipalityId,
+      jurisdictionStatus,
     ]);
 
     // 3. Insert each photo into issue_media (enforced max 10)
@@ -478,7 +570,14 @@ export const reportIssue = async ({ issueId, reportedById, reason, details }) =>
   return result.rows[0];
 };
 
-export const getStats = async () => {
+export const getStats = async ({ municipalityId = null } = {}) => {
+  let where = '';
+  const params = [];
+  if (municipalityId && municipalityId !== 'all') {
+    where = 'WHERE municipality_id = $1';
+    params.push(municipalityId);
+  }
+
   const statsSql = `
     SELECT 
       COUNT(*) AS total,
@@ -489,29 +588,30 @@ export const getStats = async () => {
       COUNT(CASE WHEN status = 'citizen_verified' THEN 1 END) AS verified,
       COUNT(CASE WHEN status = 'reopened' THEN 1 END) AS reopened,
       COUNT(CASE WHEN duplicate_of IS NOT NULL THEN 1 END) AS duplicates
-    FROM issues;
+    FROM issues ${where};
   `;
-  const statsRes = await query(statsSql);
+  const statsRes = await query(statsSql, params);
   const counts = statsRes.rows[0];
 
   const categorySql = `
     SELECT c.id, c.name, COUNT(i.id) AS count
     FROM categories c
-    LEFT JOIN issues i ON i.category_id = c.id
+    LEFT JOIN issues i ON i.category_id = c.id ${where ? 'AND i.municipality_id = $1' : ''}
     GROUP BY c.id, c.name
     ORDER BY count DESC;
   `;
-  const catRes = await query(categorySql);
+  const catRes = await query(categorySql, params);
 
   const wardSql = `
     SELECT COALESCE(l.ward, 'Ward General') AS ward, COUNT(i.id) AS count,
            COUNT(CASE WHEN i.status IN ('reported', 'under_review', 'accepted', 'in_progress', 'reopened') THEN 1 END) AS unresolved
     FROM issues i
     LEFT JOIN locations l ON l.id = i.location_id
+    ${where ? 'WHERE i.municipality_id = $1' : ''}
     GROUP BY COALESCE(l.ward, 'Ward General')
     ORDER BY count DESC;
   `;
-  const wardRes = await query(wardSql);
+  const wardRes = await query(wardSql, params);
 
   const total = parseInt(counts.total, 10);
   const verified = parseInt(counts.verified, 10);
@@ -537,15 +637,30 @@ export const deleteIssue = async (id) => {
   return result.rows[0] || null;
 };
 
-// Category-tailored proximity radii in metres for realistic Indian civic issues
-const CATEGORY_RADII_METRES = {
-  roads_potholes: 150,        // Pothole: small radius
-  garbage_sanitation: 300,    // Garbage dumping: small/medium radius
-  water_drainage: 350,        // Drainage blockage: small/medium radius
-  streetlights_power: 150,    // Streetlight: smaller radius
-  public_infrastructure: 400, // Road/footpath/park damage: medium radius
-  traffic_safety: 200,        // Traffic safety: 200m
+// Centralized Configurable Duplicate Detection Parameters
+export const DUPLICATE_CONFIG = {
+  defaultRadiusMetres: 200,
+  categoryRadii: {
+    roads_potholes: 200,
+    garbage_sanitation: 200,
+    water_drainage: 250,
+    streetlights_power: 150,
+    public_infrastructure: 250,
+    traffic_safety: 200,
+    other: 200,
+  },
+  thresholds: {
+    highConfidence: 0.70,
+    mediumConfidence: 0.35,
+    keywordBoost: 0.25,
+    minTextSimCloseProximity: 0.25,
+    closeProximityMetres: 40,
+  },
+  maxResults: 3,
 };
+
+// Category-tailored proximity radii in metres for backward compatibility
+const CATEGORY_RADII_METRES = DUPLICATE_CONFIG.categoryRadii;
 
 // Common Indian civic stop words to strip during description/title normalization
 const CIVIC_STOP_WORDS = new Set([
@@ -579,14 +694,16 @@ function calculateTokenSimilarity(tokensA, tokensB) {
 /**
  * Smart Complaint Merging / Civic Issue Identity & Clustering System
  * Uses:
- * 1. Category Match (compatible categories only)
- * 2. Category-tailored geographic radius & Haversine distance
+ * 1. Category Match (compatible categories only, plus custom categories)
+ * 2. Category-tailored geographic radius & Haversine distance (~200m initial radius)
  * 3. Normalized Title/Description Jaccard text similarity
- * 4. Active unresolved status filter (never matches completed/verified)
+ * 4. Active unresolved status filter (excludes completed, citizen_verified, rejected)
  * 5. Multi-factor duplicate confidence score (HIGH / MEDIUM / LOW)
+ * 6. Returns ranked list of top candidates (up to 3)
  */
 export const getSimilarIssues = async ({
   category,
+  customCategory = null,
   latitude,
   longitude,
   title = '',
@@ -595,11 +712,11 @@ export const getSimilarIssues = async ({
 }) => {
   if (!latitude || !longitude || !category) return [];
 
-  const maxRadius = radiusMetres || CATEGORY_RADII_METRES[category] || 250;
-  const inputTokens = extractCivicTokens(`${title} ${description}`);
+  const maxRadius = radiusMetres || DUPLICATE_CONFIG.categoryRadii[category] || DUPLICATE_CONFIG.defaultRadiusMetres;
+  const inputTokens = extractCivicTokens(`${title} ${description} ${customCategory || ''}`);
 
   // Earth radius in metres; Haversine approximation inside PostgreSQL
-  // Only search active unresolved issues (excludes completed and citizen_verified)
+  // Only search active unresolved issues (excludes completed, verified, rejected)
   const sql = `
     SELECT
       i.id,
@@ -607,6 +724,7 @@ export const getSimilarIssues = async ({
       i.description,
       i.category_id AS category,
       c.name AS "categoryName",
+      i.custom_category AS "customCategory",
       i.status,
       i.address,
       i.latitude,
@@ -644,7 +762,7 @@ export const getSimilarIssues = async ({
     const result = await query(sql, [latitude, longitude, category, maxRadius]);
     const candidates = result.rows.map((row) => {
       const distance = Math.round(parseFloat(row.distance_metres));
-      const candTokens = extractCivicTokens(`${row.title} ${row.description}`);
+      const candTokens = extractCivicTokens(`${row.title} ${row.description} ${row.customCategory || ''}`);
       const textSimilarity = calculateTokenSimilarity(inputTokens, candTokens);
 
       // Proximity score: 1.0 at 0m down to 0.0 at maxRadius
@@ -652,8 +770,8 @@ export const getSimilarIssues = async ({
 
       // Domain keyword boosts (e.g. both mentioning pothole/crater, garbage/waste, etc.)
       let keywordBoost = 0;
-      const combinedInput = `${title} ${description}`.toLowerCase();
-      const combinedCand = `${row.title} ${row.description}`.toLowerCase();
+      const combinedInput = `${title} ${description} ${customCategory || ''}`.toLowerCase();
+      const combinedCand = `${row.title} ${row.description} ${row.customCategory || ''}`.toLowerCase();
       if (
         (combinedInput.includes('pothole') && combinedCand.includes('pothole')) ||
         (combinedInput.includes('crater') && combinedCand.includes('pothole')) ||
@@ -661,17 +779,23 @@ export const getSimilarIssues = async ({
         (combinedInput.includes('drainage') && combinedCand.includes('waterlogging')) ||
         (combinedInput.includes('leakage') && combinedCand.includes('pipeline'))
       ) {
-        keywordBoost = 0.25;
+        keywordBoost = DUPLICATE_CONFIG.thresholds.keywordBoost;
       }
 
       const rawScore = 0.45 * proximityScore + 0.45 * textSimilarity + keywordBoost;
       const confidenceScore = Math.min(1.0, Math.round(rawScore * 100) / 100);
 
-      // Classify confidence level
+      // Classify confidence level based on configured thresholds
       let confidenceLevel = 'LOW';
-      if (confidenceScore >= 0.70 || (distance <= 40 && textSimilarity >= 0.25)) {
+      if (
+        confidenceScore >= DUPLICATE_CONFIG.thresholds.highConfidence ||
+        (distance <= DUPLICATE_CONFIG.thresholds.closeProximityMetres && textSimilarity >= DUPLICATE_CONFIG.thresholds.minTextSimCloseProximity)
+      ) {
         confidenceLevel = 'HIGH';
-      } else if (confidenceScore >= 0.35 || distance <= 80) {
+      } else if (
+        confidenceScore >= DUPLICATE_CONFIG.thresholds.mediumConfidence ||
+        distance <= 80
+      ) {
         confidenceLevel = 'MEDIUM';
       }
 
@@ -681,17 +805,23 @@ export const getSimilarIssues = async ({
         description: row.description,
         category: row.category,
         categoryName: row.categoryName,
+        customCategory: row.customCategory,
         status: row.status,
         address: row.address,
         latitude: row.latitude,
         longitude: row.longitude,
         imageUrl: row.imageUrl,
-        upvotes: row.upvotes,
+        thumbnail: row.imageUrl,
+        upvotes: parseInt(row.upvotes || 0, 10),
+        supporterCount: parseInt(row.upvotes || 0, 10),
         duplicateOf: row.duplicateOf || null,
         mergedCount: parseInt(row.mergedCount || 0, 10),
+        approximateDistance: distance,
         distanceMetres: distance,
         confidenceScore,
         confidenceLevel,
+        link: `/api/issues/${row.id}`,
+        createdAt: row.createdAt,
         reportedAt: new Date(row.createdAt).toLocaleDateString('en-US', {
           month: 'short',
           day: 'numeric',
@@ -700,8 +830,9 @@ export const getSimilarIssues = async ({
       };
     });
 
-    // Sort by confidenceScore descending, then distance ascending
-    return candidates.sort((a, b) => b.confidenceScore - a.confidenceScore || a.distanceMetres - b.distanceMetres);
+    // Sort by confidenceScore descending, then distance ascending, and return top configured results (max 3)
+    const sorted = candidates.sort((a, b) => b.confidenceScore - a.confidenceScore || a.distanceMetres - b.distanceMetres);
+    return sorted.slice(0, DUPLICATE_CONFIG.maxResults);
   } catch (err) {
     console.error('[getSimilarIssues] Query error:', err.message);
     return [];
@@ -798,19 +929,42 @@ export const joinCanonicalIssue = async (userId, userName, canonicalId) => {
  * Preserves original reporter, timestamp, description, and supporters.
  * Consolidates all co-signers to the canonical complaint.
  */
-export const markAsDuplicate = async (duplicateId, canonicalId, adminUserId, adminName) => {
+export const markAsDuplicate = async (duplicateId, canonicalId, adminUserId, adminName, roleName = 'Moderation') => {
+  if (duplicateId === canonicalId) {
+    return { error: 'An issue cannot be marked as a duplicate of itself.', code: 400 };
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
     // Verify both issues exist
     const checkRes = await client.query(
-      `SELECT id, title FROM issues WHERE id = ANY($1);`,
+      `SELECT id, title, duplicate_of, municipality_id FROM issues WHERE id = ANY($1);`,
       [[duplicateId, canonicalId]]
     );
     if (checkRes.rows.length < 2) {
       await client.query('ROLLBACK');
-      return null;
+      return { error: 'One or both issue IDs not found.', code: 404 };
+    }
+
+    const dupRow = checkRes.rows.find((r) => r.id === duplicateId);
+    const canRow = checkRes.rows.find((r) => r.id === canonicalId);
+
+    // Prevent linking if canonical issue is already a duplicate of something
+    if (canRow.duplicate_of) {
+      await client.query('ROLLBACK');
+      return { error: 'Cannot mark an issue as a duplicate of an already merged complaint.', code: 400 };
+    }
+
+    // Prevent circular duplicate links
+    const circularCheck = await client.query(
+      `SELECT id FROM issues WHERE duplicate_of = $1 AND id = $2;`,
+      [duplicateId, canonicalId]
+    );
+    if (circularCheck.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return { error: 'Circular duplicate link detected. Cannot link complaints in a circular loop.', code: 400 };
     }
 
     // Link duplicate issue to canonical issue
@@ -834,21 +988,22 @@ export const markAsDuplicate = async (duplicateId, canonicalId, adminUserId, adm
       [canonicalId]
     );
 
-    const canonicalTitle = checkRes.rows.find((r) => r.id === canonicalId)?.title || canonicalId;
-    const duplicateTitle = checkRes.rows.find((r) => r.id === duplicateId)?.title || duplicateId;
+    const canonicalTitle = canRow?.title || canonicalId;
+    const duplicateTitle = dupRow?.title || duplicateId;
 
     // Add audit history note to duplicate issue
     await client.query(
       `INSERT INTO issue_updates (issue_id, status, title, author_id, author, role, note)
-       SELECT id, status, 'Marked as Duplicate by Administrator',
-         $2, $3, 'Admin Moderation',
-         $4
+       SELECT id, status, 'Marked as Duplicate',
+         $2, $3, $4,
+         $5
        FROM issues WHERE id = $1;`,
       [
         duplicateId,
         adminUserId,
         adminName,
-        `This complaint has been identified as a duplicate of ${canonicalId}: "${canonicalTitle}". Supporters have been consolidated into the canonical complaint.`,
+        roleName || 'Municipal Moderation',
+        `This complaint has been verified as a duplicate of ${canonicalId}: "${canonicalTitle}". Supporters have been consolidated into the canonical complaint.`,
       ]
     );
 
@@ -856,19 +1011,20 @@ export const markAsDuplicate = async (duplicateId, canonicalId, adminUserId, adm
     await client.query(
       `INSERT INTO issue_updates (issue_id, status, title, author_id, author, role, note)
        SELECT id, status, 'Duplicate Complaint Merged',
-         $2, $3, 'Admin Moderation',
-         $4
+         $2, $3, $4,
+         $5
        FROM issues WHERE id = $1;`,
       [
         canonicalId,
         adminUserId,
         adminName,
+        roleName || 'Municipal Moderation',
         `Complaint ${duplicateId}: "${duplicateTitle}" has been verified as a duplicate and merged here.`,
       ]
     );
 
     await client.query('COMMIT');
-    return { duplicateId, canonicalId };
+    return { duplicateId, canonicalId, success: true };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -933,4 +1089,75 @@ export const unlinkDuplicate = async (duplicateId, adminUserId, adminName) => {
     client.release();
   }
 };
+
+/**
+ * Retrieve all merged child complaints linked to a canonical complaint.
+ * Preserves full reporter attribution, notes, and photos.
+ */
+export const getMergedIssues = async (canonicalId) => {
+  const sql = `
+    SELECT 
+      i.id,
+      i.title,
+      i.description,
+      i.category_id AS category,
+      c.name AS "categoryName",
+      i.status,
+      i.address,
+      i.latitude,
+      i.longitude,
+      i.image_url AS "imageUrl",
+      i.completion_evidence_url AS "completionEvidenceUrl",
+      i.reported_by_id AS "reportedById",
+      i.reporter_name AS "reporterName",
+      i.reporter_badge AS "reporterBadge",
+      i.reporter_avatar AS "reporterAvatar",
+      i.upvotes_count AS "upvotes",
+      i.duplicate_of AS "duplicateOf",
+      i.created_at AS "createdAt",
+      i.updated_at AS "updatedAt"
+    FROM issues i
+    JOIN categories c ON c.id = i.category_id
+    WHERE i.duplicate_of = $1
+    ORDER BY i.created_at ASC;
+  `;
+  const result = await query(sql, [canonicalId]);
+  return result.rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    category: row.category,
+    categoryName: row.categoryName,
+    status: row.status,
+    address: row.address,
+    latitude: row.latitude,
+    longitude: row.longitude,
+    imageUrl: row.imageUrl,
+    completionEvidenceUrl: row.completionEvidenceUrl,
+    duplicateOf: row.duplicateOf,
+    reportedById: row.reportedById,
+    reportedBy: {
+      name: row.reporterName,
+      badge: row.reporterBadge,
+      avatar: row.reporterAvatar,
+    },
+    reportedAt: new Date(row.createdAt).toLocaleDateString('en-IN', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    }),
+    upvotes: row.upvotes,
+  }));
+};
+
+export const addIssueMedia = async ({ issueId, uploadedById, mediaUrl, mediaType = 'image', caption }) => {
+  const sql = `
+    INSERT INTO issue_media (issue_id, uploaded_by_id, media_url, media_type, caption)
+    VALUES ($1, $2, $3, $4, $5)
+    RETURNING id, issue_id, uploaded_by_id, media_url AS "mediaUrl", media_type AS "mediaType", caption, created_at AS "createdAt";
+  `;
+  const res = await query(sql, [issueId, uploadedById || null, mediaUrl, mediaType, caption || null]);
+  return res.rows[0];
+};
+
 
