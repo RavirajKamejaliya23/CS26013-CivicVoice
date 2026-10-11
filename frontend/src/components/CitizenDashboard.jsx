@@ -15,8 +15,10 @@ export default function CitizenDashboard({
   onUpvote,
   onVerify,
   onNavigateTab,
+  onViewMerged,
   initialFilter = 'all',
 }) {
+
   const [activeFilter, setActiveFilter] = useState(initialFilter); // 'all', 'my_reports', 'supported', 'needs_verify'
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -44,7 +46,7 @@ export default function CitizenDashboard({
     // Issues reported by this citizen
     const myReports = issues.filter((i) => {
       const repName = i.reportedBy?.name?.toLowerCase() || '';
-      return repName === userName || (userId && i.reported_by_id === userId);
+      return repName === userName || (userId && (i.reported_by_id === userId || i.reportedById === userId));
     });
 
     // Issues co-signed/supported by this citizen
@@ -73,9 +75,10 @@ export default function CitizenDashboard({
       // Subtab filter
       if (activeFilter === 'my_reports') {
         const repName = issue.reportedBy?.name?.toLowerCase() || '';
-        const isMine = repName === userName || (userId && issue.reported_by_id === userId);
+        const isMine = repName === userName || (userId && (issue.reported_by_id === userId || issue.reportedById === userId));
         if (!isMine) return false;
       } else if (activeFilter === 'supported') {
+
         if (!issue.hasUpvoted) return false;
       } else if (activeFilter === 'needs_verify') {
         if (issue.status !== 'completed') return false;
@@ -105,17 +108,17 @@ export default function CitizenDashboard({
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       {/* ── Welcome & Location Header ────────────────────────────────────── */}
-      <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-stone-900 via-stone-900 to-amber-950/40 border border-stone-800 shadow-xl backdrop-blur-md">
+      <div className="p-6 sm:p-8 rounded-3xl bg-[var(--theme-card-bg,#FFFDF5)] border border-[var(--theme-card-border,#E7DDC5)] shadow-xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-xs font-mono font-bold uppercase tracking-wider text-amber-400">
-              <MapPin className="w-4 h-4 text-amber-400" />
-              <span>Vadodara Municipal Corporation · Ward 6 (Gotri & Alkapuri)</span>
+            <div className="flex items-center gap-2 text-xs font-mono font-bold uppercase tracking-wider text-[#8A6418]">
+              <MapPin className="w-4 h-4 text-[#8A6418]" />
+              <span>Responsible Civic Authority · Your Ward & Locality</span>
             </div>
-            <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
+            <h1 className="text-3xl sm:text-4xl font-black text-[var(--theme-heading,#29261F)] tracking-tight">
               {greeting}, {user?.name || 'Citizen'}!
             </h1>
-            <p className="text-xs sm:text-sm text-stone-300 font-mono max-w-2xl leading-relaxed">
+            <p className="text-xs sm:text-sm text-[var(--theme-text-secondary,#625D52)] font-mono max-w-2xl leading-relaxed">
               Report civic complaints in your locality, support nearby community issues, and verify municipal work after completion.
             </p>
           </div>
@@ -125,7 +128,7 @@ export default function CitizenDashboard({
             <button
               type="button"
               onClick={onOpenReportModal}
-              className="px-6 py-3.5 rounded-2xl bg-yellow-400 hover:bg-yellow-300 text-black font-mono font-black text-xs uppercase tracking-wider shadow-lg shadow-yellow-400/20 flex items-center justify-center gap-2 transition-all active:scale-95"
+              className="px-6 py-3.5 rounded-2xl bg-[#8A6418] hover:bg-[#735212] text-white font-mono font-bold text-xs uppercase tracking-wider shadow-sm flex items-center justify-center gap-2 transition-all active:scale-95"
             >
               <PlusCircle className="w-4 h-4 stroke-[3]" />
               <span>Report a Problem</span>
@@ -133,9 +136,9 @@ export default function CitizenDashboard({
             <button
               type="button"
               onClick={() => setShowMiniMap((prev) => !prev)}
-              className="px-4 py-3.5 rounded-2xl bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 font-mono text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all"
+              className="px-4 py-3.5 rounded-2xl bg-white hover:bg-[var(--theme-surface-secondary,#FDF7E7)] text-[var(--theme-text-primary,#29261F)] border border-[var(--theme-card-border,#E7DDC5)] font-mono text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-2xs"
             >
-              <Navigation className="w-4 h-4 text-amber-400" />
+              <Navigation className="w-4 h-4 text-[#8A6418]" />
               <span>{showMiniMap ? 'Hide Ward Map' : 'View Ward Map'}</span>
             </button>
           </div>
@@ -150,20 +153,20 @@ export default function CitizenDashboard({
           onClick={() => setActiveFilter('all')}
           className={`p-4 rounded-2xl border text-left transition-all ${
             activeFilter === 'all'
-              ? 'bg-amber-500/20 border-amber-400 ring-2 ring-amber-400/30'
-              : 'bg-stone-900 border-stone-800 hover:border-stone-700'
+              ? 'bg-[var(--theme-pill-bg,#FDF1CE)] border-[#8A6418] ring-2 ring-[#8A6418]/25'
+              : 'bg-[var(--theme-card-bg,#FFFDF5)] border-[var(--theme-card-border,#E7DDC5)] hover:border-[#8A6418]/40'
           }`}
         >
           <div className="flex items-center justify-between mb-2">
-            <span className="text-amber-400 font-mono text-xs uppercase tracking-wider font-bold">
+            <span className="text-[#8A6418] font-mono text-xs uppercase tracking-wider font-bold">
               Nearby Issues
             </span>
-            <MapPin className="w-4 h-4 text-amber-400" />
+            <MapPin className="w-4 h-4 text-[#8A6418]" />
           </div>
-          <div className="text-2xl font-black font-mono text-white">
+          <div className="text-2xl font-black font-mono text-[var(--theme-heading,#29261F)]">
             {issues.length}
           </div>
-          <div className="text-[10px] font-mono text-stone-400 mt-1">
+          <div className="text-[10px] font-mono text-[var(--theme-text-secondary,#625D52)] mt-1">
             Ward complaints
           </div>
         </button>
@@ -174,20 +177,20 @@ export default function CitizenDashboard({
           onClick={() => setActiveFilter('my_reports')}
           className={`p-4 rounded-2xl border text-left transition-all ${
             activeFilter === 'my_reports'
-              ? 'bg-amber-500/20 border-amber-400 ring-2 ring-amber-400/30'
-              : 'bg-stone-900 border-stone-800 hover:border-stone-700'
+              ? 'bg-[var(--theme-pill-bg,#FDF1CE)] border-[#8A6418] ring-2 ring-[#8A6418]/25'
+              : 'bg-[var(--theme-card-bg,#FFFDF5)] border-[var(--theme-card-border,#E7DDC5)] hover:border-[#8A6418]/40'
           }`}
         >
           <div className="flex items-center justify-between mb-2">
-            <span className="text-amber-400 font-mono text-xs uppercase tracking-wider font-bold">
+            <span className="text-[#8A6418] font-mono text-xs uppercase tracking-wider font-bold">
               My Complaints
             </span>
-            <AlertTriangle className="w-4 h-4 text-amber-400" />
+            <AlertTriangle className="w-4 h-4 text-[#8A6418]" />
           </div>
-          <div className="text-2xl font-black font-mono text-white">
+          <div className="text-2xl font-black font-mono text-[var(--theme-heading,#29261F)]">
             {userStats.myReportsCount}
           </div>
-          <div className="text-[10px] font-mono text-stone-400 mt-1">
+          <div className="text-[10px] font-mono text-[var(--theme-text-secondary,#625D52)] mt-1">
             Reported by you
           </div>
         </button>
@@ -198,20 +201,20 @@ export default function CitizenDashboard({
           onClick={() => setActiveFilter('supported')}
           className={`p-4 rounded-2xl border text-left transition-all ${
             activeFilter === 'supported'
-              ? 'bg-blue-500/20 border-blue-400 ring-2 ring-blue-400/30'
-              : 'bg-stone-900 border-stone-800 hover:border-stone-700'
+              ? 'bg-[var(--theme-pill-bg,#FDF1CE)] border-[#8A6418] ring-2 ring-[#8A6418]/25'
+              : 'bg-[var(--theme-card-bg,#FFFDF5)] border-[var(--theme-card-border,#E7DDC5)] hover:border-[#8A6418]/40'
           }`}
         >
           <div className="flex items-center justify-between mb-2">
-            <span className="text-blue-400 font-mono text-xs uppercase tracking-wider font-bold">
+            <span className="text-[#8A6418] font-mono text-xs uppercase tracking-wider font-bold">
               Supported
             </span>
-            <ThumbsUp className="w-4 h-4 text-blue-400" />
+            <ThumbsUp className="w-4 h-4 text-[#8A6418]" />
           </div>
-          <div className="text-2xl font-black font-mono text-white">
+          <div className="text-2xl font-black font-mono text-[var(--theme-heading,#29261F)]">
             {userStats.supportedCount}
           </div>
-          <div className="text-[10px] font-mono text-stone-400 mt-1">
+          <div className="text-[10px] font-mono text-[var(--theme-text-secondary,#625D52)] mt-1">
             Co-signed issues
           </div>
         </button>
@@ -222,20 +225,20 @@ export default function CitizenDashboard({
           onClick={() => setActiveFilter('needs_verify')}
           className={`p-4 rounded-2xl border text-left transition-all ${
             activeFilter === 'needs_verify'
-              ? 'bg-teal-500/20 border-teal-400 ring-2 ring-teal-400/30'
-              : 'bg-stone-900 border-stone-800 hover:border-stone-700'
+              ? 'bg-[var(--theme-pill-bg,#FDF1CE)] border-[#8A6418] ring-2 ring-[#8A6418]/25'
+              : 'bg-[var(--theme-card-bg,#FFFDF5)] border-[var(--theme-card-border,#E7DDC5)] hover:border-[#8A6418]/40'
           }`}
         >
           <div className="flex items-center justify-between mb-2">
-            <span className="text-teal-400 font-mono text-xs uppercase tracking-wider font-bold">
+            <span className="text-[#8A6418] font-mono text-xs uppercase tracking-wider font-bold">
               Verification
             </span>
-            <Clock className="w-4 h-4 text-teal-400" />
+            <Clock className="w-4 h-4 text-[#8A6418]" />
           </div>
-          <div className="text-2xl font-black font-mono text-teal-300">
+          <div className="text-2xl font-black font-mono text-[var(--theme-heading,#29261F)]">
             {userStats.awaitingVerifyCount}
           </div>
-          <div className="text-[10px] font-mono text-stone-400 mt-1">
+          <div className="text-[10px] font-mono text-[var(--theme-text-secondary,#625D52)] mt-1">
             Awaiting inspection
           </div>
         </button>
@@ -246,20 +249,20 @@ export default function CitizenDashboard({
           onClick={() => setActiveFilter('resolved')}
           className={`p-4 rounded-2xl border text-left transition-all ${
             activeFilter === 'resolved'
-              ? 'bg-emerald-500/20 border-emerald-400 ring-2 ring-emerald-400/30'
-              : 'bg-stone-900 border-stone-800 hover:border-stone-700'
+              ? 'bg-[var(--theme-pill-bg,#FDF1CE)] border-[#8A6418] ring-2 ring-[#8A6418]/25'
+              : 'bg-[var(--theme-card-bg,#FFFDF5)] border-[var(--theme-card-border,#E7DDC5)] hover:border-[#8A6418]/40'
           }`}
         >
           <div className="flex items-center justify-between mb-2">
-            <span className="text-emerald-400 font-mono text-xs uppercase tracking-wider font-bold">
+            <span className="text-emerald-700 font-mono text-xs uppercase tracking-wider font-bold">
               Resolved
             </span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-700" />
           </div>
-          <div className="text-2xl font-black font-mono text-emerald-400">
+          <div className="text-2xl font-black font-mono text-emerald-800">
             {userStats.resolvedCount}
           </div>
-          <div className="text-[10px] font-mono text-stone-400 mt-1">
+          <div className="text-[10px] font-mono text-[var(--theme-text-secondary,#625D52)] mt-1">
             Citizen certified
           </div>
         </button>
@@ -267,16 +270,16 @@ export default function CitizenDashboard({
 
       {/* ── Optional GIS Radar Map Preview ──────────────────────────────── */}
       {showMiniMap && (
-        <div className="rounded-3xl bg-stone-900 border border-stone-800 p-4 shadow-xl">
+        <div className="rounded-3xl bg-[var(--theme-card-bg,#FFFDF5)] border border-[var(--theme-card-border,#E7DDC5)] p-4 shadow-xs">
           <div className="flex items-center justify-between mb-3 px-2">
-            <div className="flex items-center gap-2 text-xs font-mono font-bold uppercase text-amber-400">
+            <div className="flex items-center gap-2 text-xs font-mono font-bold uppercase text-[#8A6418]">
               <Navigation className="w-4 h-4" />
               <span>Interactive Ward GIS Radar</span>
             </div>
             <button
               type="button"
               onClick={() => onNavigateTab && onNavigateTab('map')}
-              className="text-xs font-mono text-stone-400 hover:text-white underline"
+              className="text-xs font-mono text-[#8A6418] hover:underline"
             >
               Open Full Screen Map →
             </button>
@@ -293,7 +296,7 @@ export default function CitizenDashboard({
       <section className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-black text-white font-mono uppercase tracking-tight">
+            <h2 className="text-2xl font-black text-[var(--theme-heading,#29261F)] font-mono uppercase tracking-tight">
               {activeFilter === 'my_reports'
                 ? 'My Reported Dispatches'
                 : activeFilter === 'supported'
@@ -302,7 +305,7 @@ export default function CitizenDashboard({
                 ? 'Completed Work Requiring Citizen Verification'
                 : 'Neighborhood Civic Dispatches'}
             </h2>
-            <p className="text-xs text-stone-400 font-mono mt-0.5">
+            <p className="text-xs text-[var(--theme-text-secondary,#625D52)] font-mono mt-0.5">
               Showing {filteredIssues.length} active neighborhood issue{filteredIssues.length !== 1 ? 's' : ''}
             </p>
           </div>
@@ -314,14 +317,14 @@ export default function CitizenDashboard({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by ticket #, street..."
-              className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-stone-900 border border-stone-800 text-white placeholder:text-stone-500 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-yellow-400"
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-white border border-[var(--theme-card-border,#E7DDC5)] text-[var(--theme-text-primary,#29261F)] placeholder:text-[var(--theme-text-muted,#787367)] text-xs font-mono focus:outline-none focus:ring-2 focus:ring-[#8A6418]"
             />
-            <Search className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
+            <Search className="w-4 h-4 text-[var(--theme-text-muted,#787367)] absolute left-3 top-3" />
           </div>
         </div>
 
         {/* Subtab filter navigation */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-stone-800">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-[var(--theme-card-border,#E7DDC5)]">
           {[
             { id: 'all', label: 'All Community Dispatches' },
             { id: 'my_reports', label: `My Reports (${userStats.myReportsCount})` },
@@ -333,8 +336,8 @@ export default function CitizenDashboard({
               onClick={() => setActiveFilter(tab.id)}
               className={`px-3.5 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider whitespace-nowrap transition-all ${
                 activeFilter === tab.id
-                  ? 'bg-yellow-400 text-black shadow-md'
-                  : 'bg-stone-900 text-stone-400 hover:text-white hover:bg-stone-800'
+                  ? 'bg-[#8A6418] text-white shadow-xs font-black'
+                  : 'bg-[var(--theme-card-bg,#FFFDF5)] text-[var(--theme-text-primary,#29261F)] border border-[var(--theme-card-border,#E7DDC5)] hover:bg-[var(--theme-surface-secondary,#FDF7E7)]'
               }`}
             >
               {tab.label}
@@ -350,8 +353,8 @@ export default function CitizenDashboard({
               onClick={() => setSelectedCategory(c.id)}
               className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold uppercase tracking-wider whitespace-nowrap transition-all ${
                 selectedCategory === c.id
-                  ? 'bg-white text-black shadow-md'
-                  : 'bg-stone-900 text-stone-400 hover:bg-stone-800 hover:text-white'
+                  ? 'bg-[#8A6418] text-white shadow-xs'
+                  : 'bg-[var(--theme-card-bg,#FFFDF5)] text-[var(--theme-text-secondary,#625D52)] border border-[var(--theme-card-border,#E7DDC5)] hover:bg-[var(--theme-surface-secondary,#FDF7E7)]'
               }`}
             >
               {c.label}
@@ -361,13 +364,13 @@ export default function CitizenDashboard({
 
         {/* Empty state or Grid */}
         {filteredIssues.length === 0 ? (
-          <div className="p-16 rounded-3xl bg-stone-900 border border-stone-800 text-center space-y-4">
-            <Search className="w-10 h-10 text-stone-600 mx-auto" />
+          <div className="p-16 rounded-3xl bg-[var(--theme-card-bg,#FFFDF5)] border border-[var(--theme-card-border,#E7DDC5)] text-center space-y-4">
+            <Search className="w-10 h-10 text-[var(--theme-text-muted,#787367)] mx-auto" />
             <div className="space-y-1">
-              <div className="text-sm font-bold text-stone-300 font-mono">
+              <div className="text-sm font-bold text-[var(--theme-heading,#29261F)] font-mono">
                 No civic issues match your current filters.
               </div>
-              <p className="text-xs text-stone-500 font-mono">
+              <p className="text-xs text-[var(--theme-text-secondary,#625D52)] font-mono">
                 Try switching subtabs, choosing "All Issues", or clear your search query.
               </p>
             </div>
@@ -377,7 +380,7 @@ export default function CitizenDashboard({
                 setSelectedCategory('all');
                 setSearchQuery('');
               }}
-              className="px-4 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-amber-400 text-xs font-mono font-bold uppercase transition-colors"
+              className="px-4 py-2 rounded-xl bg-[var(--theme-pill-bg,#FDF1CE)] hover:bg-[#FDF1CE]/80 text-[#8A6418] border border-[var(--theme-card-border,#E7DDC5)] text-xs font-mono font-bold uppercase transition-colors"
             >
               Reset Filters
             </button>
@@ -393,7 +396,9 @@ export default function CitizenDashboard({
                 onOpenTimeline={onOpenTimeline}
                 onVerify={onVerify}
                 onAdminAction={() => {}}
+                onViewMerged={onViewMerged}
               />
+
             ))}
           </div>
         )}
