@@ -19,4 +19,13 @@ export const config = {
   dbName: process.env.DB_NAME || 'civicvoice',
   jwtSecret: process.env.JWT_SECRET || 'civicvoice_jwt_secret_dev_key_change_in_production_2026',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  googleClientId: process.env.GOOGLE_CLIENT_ID || null,
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || null,
+  smtpHost: process.env.SMTP_HOST || null,
+  smtpPort: process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 587,
+  smtpUser: process.env.SMTP_USER || null,
+  smtpPass: process.env.SMTP_PASS || null,
+  smtpFrom: process.env.SMTP_FROM || 'CivicVoice <no-reply@civicvoice.org>',
+  frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
 };
+
