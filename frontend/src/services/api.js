@@ -12,9 +12,12 @@ export const setAuthToken = (token) => {
 
 const apiRequest = async (endpoint, { method = 'GET', body = null, headers = {} } = {}) => {
   const token = getAuthToken();
-  const defaultHeaders = {
-    'Content-Type': 'application/json',
-  };
+  const defaultHeaders = {};
+
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+  if (!isFormData) {
+    defaultHeaders['Content-Type'] = 'application/json';
+  }
 
   if (token) {
     defaultHeaders['Authorization'] = `Bearer ${token}`;
@@ -26,7 +29,7 @@ const apiRequest = async (endpoint, { method = 'GET', body = null, headers = {} 
     const res = await fetch(`${API_BASE_URL}${endpoint}`, {
       method,
       headers: finalHeaders,
-      body: body ? JSON.stringify(body) : undefined,
+      body: isFormData ? body : (body ? JSON.stringify(body) : undefined),
     });
 
     const data = await res.json().catch(() => null);
@@ -68,6 +71,16 @@ export const api = {
       }
       return res.data;
     },
+    googleLogin: async (credential) => {
+      const res = await apiRequest('/auth/google', {
+        method: 'POST',
+        body: { credential },
+      });
+      if (res.data?.token) {
+        setAuthToken(res.data.token);
+      }
+      return res.data;
+    },
     getMe: async () => {
       const res = await apiRequest('/auth/me');
       return res.data;
@@ -83,20 +96,30 @@ export const api = {
 
   // Issues & Lifecycle
   issues: {
-    getAll: async ({ category, status, search } = {}) => {
+    getAll: async ({ category, status, search, canonicalOnly, reporterId, municipalityId, state, city } = {}) => {
       const params = new URLSearchParams();
       if (category && category !== 'all') params.append('category', category);
       if (status && status !== 'all') params.append('status', status);
       if (search && search.trim() !== '') params.append('search', search.trim());
+      if (canonicalOnly !== undefined) params.append('canonicalOnly', canonicalOnly);
+      if (reporterId) params.append('reporterId', reporterId);
+      if (municipalityId && municipalityId !== 'all') params.append('municipalityId', municipalityId);
+      if (state && state !== 'all') params.append('state', state);
+      if (city && city !== 'all') params.append('city', city);
 
       const queryStr = params.toString() ? `?${params.toString()}` : '';
       const res = await apiRequest(`/issues${queryStr}`);
       return res.data?.issues || [];
     },
+    getMerged: async (canonicalId) => {
+      const res = await apiRequest(`/issues/${canonicalId}/merged`);
+      return res.data?.merged || [];
+    },
     getById: async (id) => {
       const res = await apiRequest(`/issues/${id}`);
       return res.data?.issue;
     },
+
     create: async (issueData) => {
       const res = await apiRequest('/issues', {
         method: 'POST',
@@ -116,6 +139,20 @@ export const api = {
         body: updateData,
       });
       return res.data?.issue;
+    },
+    uploadEvidence: async (id, fileOrFormData) => {
+      let body;
+      if (typeof FormData !== 'undefined' && fileOrFormData instanceof FormData) {
+        body = fileOrFormData;
+      } else {
+        body = new FormData();
+        body.append('image', fileOrFormData);
+      }
+      const res = await apiRequest(`/issues/${id}/evidence`, {
+        method: 'POST',
+        body,
+      });
+      return res.data;
     },
     verify: async (id, verifyData) => {
       const res = await apiRequest(`/issues/${id}/verify`, {
@@ -192,6 +229,10 @@ export const api = {
       const res = await apiRequest('/admin/users');
       return res.data?.users;
     },
+    getUserProfile: async (userId) => {
+      const res = await apiRequest(`/admin/users/${userId}`);
+      return res.data;
+    },
     updateRole: async (userId, role) => {
       const res = await apiRequest(`/admin/users/${userId}/role`, {
         method: 'PATCH',
@@ -211,6 +252,105 @@ export const api = {
       const queryStr = params.toString() ? `?${params.toString()}` : '';
       const res = await apiRequest(`/admin/issues${queryStr}`);
       return res.data?.issues || [];
+    },
+    getApplications: async ({ status } = {}) => {
+      const params = new URLSearchParams();
+      if (status && status !== 'ALL') params.append('status', status);
+      const queryStr = params.toString() ? `?${params.toString()}` : '';
+      const res = await apiRequest(`/admin/municipal-applications${queryStr}`);
+      return res.data?.applications || [];
+    },
+    getApplicationDetail: async (id) => {
+      const res = await apiRequest(`/admin/municipal-applications/${id}`);
+      return res.data?.application;
+    },
+    reviewApplication: async (id, { status, adminNotes, rejectionReason, createBody = true }) => {
+      const res = await apiRequest(`/admin/municipal-applications/${id}/status`, {
+        method: 'PATCH',
+        body: { status, adminNotes, rejectionReason, createBody },
+      });
+      return res.data;
+    },
+    reassignMunicipality: async (issueId, municipalityId, reason) => {
+      const res = await apiRequest(`/admin/issues/${issueId}/reassign-municipality`, {
+        method: 'PATCH',
+        body: { municipalityId, reason },
+      });
+      return res.data;
+    },
+    getAuditLogs: async ({ resourceType, limit } = {}) => {
+      const params = new URLSearchParams();
+      if (resourceType) params.append('resourceType', resourceType);
+      if (limit) params.append('limit', limit);
+      const queryStr = params.toString() ? `?${params.toString()}` : '';
+      const res = await apiRequest(`/admin/audit-logs${queryStr}`);
+      return res.data?.logs || [];
+    },
+  },
+
+  // Multi-Municipality Public & Onboarding
+  municipalities: {
+    getAll: async ({ status } = {}) => {
+      const params = new URLSearchParams();
+      if (status) params.append('status', status);
+      const queryStr = params.toString() ? `?${params.toString()}` : '';
+      const res = await apiRequest(`/municipalities${queryStr}`);
+      return res.data?.municipalities || [];
+    },
+    getById: async (id) => {
+      const res = await apiRequest(`/municipalities/${id}`);
+      return res.data?.municipality;
+    },
+    submitOnboarding: async (formData) => {
+      const res = await apiRequest('/municipalities/onboard', {
+        method: 'POST',
+        body: formData,
+      });
+      return res.data;
+    },
+    checkJurisdiction: async (latitude, longitude) => {
+      const res = await apiRequest(`/municipalities/jurisdiction/check?latitude=${latitude}&longitude=${longitude}`);
+      return res.data;
+    },
+  },
+
+  // Municipal Staff Management
+  municipalStaff: {
+    getStaff: async (municipalityId) => {
+      const queryStr = municipalityId ? `?municipalityId=${municipalityId}` : '';
+      const res = await apiRequest(`/municipalities/staff${queryStr}`);
+      return res.data?.officers || [];
+    },
+    getOfficers: async (municipalityId) => {
+      const queryStr = municipalityId ? `?municipalityId=${municipalityId}` : '';
+      const res = await apiRequest(`/municipalities/staff${queryStr}`);
+      return res.data?.officers || [];
+    },
+    inviteStaff: async (officerData) => {
+      const res = await apiRequest('/municipalities/staff/invite', {
+        method: 'POST',
+        body: officerData,
+      });
+      return res.data?.officer || res.data;
+    },
+    createOfficer: async (officerData) => {
+      const res = await apiRequest('/municipalities/staff/invite', {
+        method: 'POST',
+        body: officerData,
+      });
+      return res.data?.officer || res.data;
+    },
+  },
+
+  // Advanced Analytics
+  analytics: {
+    getOverview: async ({ municipalityId = 'all', days = 'all' } = {}) => {
+      const params = new URLSearchParams();
+      if (municipalityId && municipalityId !== 'all') params.append('municipalityId', municipalityId);
+      if (days && days !== 'all') params.append('days', days);
+      const queryStr = params.toString() ? `?${params.toString()}` : '';
+      const res = await apiRequest(`/analytics/overview${queryStr}`);
+      return res.data;
     },
   },
 };
