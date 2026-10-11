@@ -10,7 +10,10 @@ export default function MunicipalProgressModal({ issue, isOpen, onClose, onSucce
   const [officerName, setOfficerName] = useState('');
   const [department, setDepartment] = useState('');
   const [note, setNote] = useState('');
+  const [evidenceMode, setEvidenceMode] = useState('upload'); // 'upload' | 'url'
   const [evidenceUrl, setEvidenceUrl] = useState('https://images.unsplash.com/photo-1584467735871-8e85353a8413?w=800&auto=format&fit=crop&q=80');
+  const [evidenceFile, setEvidenceFile] = useState(null);
+  const [evidencePreview, setEvidencePreview] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -18,13 +21,37 @@ export default function MunicipalProgressModal({ issue, isOpen, onClose, onSucce
   useEffect(() => {
     if (issue) {
       setNextStatus(issue.status === 'reported' ? 'in_progress' : issue.status || 'in_progress');
-      setOfficerName(user?.name || 'Supervisor R. Vance');
-      setDepartment(user?.department || 'Dept of Public Works — Field Squad');
+      setOfficerName(user?.name || 'Executive Officer');
+      setDepartment(user?.department || 'Roads & Infrastructure - Ward 6');
       setErrorMessage('');
+      setEvidenceFile(null);
+      setEvidencePreview(null);
     }
   }, [issue, user]);
 
   if (!isOpen || !issue) return null;
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setErrorMessage('Please select a valid photographic image file (JPEG, PNG, WebP).');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setErrorMessage('Image size exceeds 5MB limit. Please upload a smaller photo.');
+      return;
+    }
+
+    setErrorMessage('');
+    setEvidenceFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setEvidencePreview(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -36,14 +63,39 @@ export default function MunicipalProgressModal({ issue, isOpen, onClose, onSucce
       return;
     }
 
+    let finalEvidenceUrl = null;
+    if (nextStatus === 'completed') {
+      if (evidenceMode === 'upload') {
+        if (!evidenceFile && !evidencePreview) {
+          setErrorMessage('Please upload a completion photograph showing the resolved work.');
+          return;
+        }
+      } else {
+        if (!evidenceUrl.trim()) {
+          setErrorMessage('Please provide a completion photographic evidence URL.');
+          return;
+        }
+        finalEvidenceUrl = evidenceUrl.trim();
+      }
+    }
+
     setIsSubmitting(true);
     try {
+      // If photo file was selected, upload to backend first
+      if (nextStatus === 'completed' && evidenceFile) {
+        const uploadResult = await api.issues.uploadEvidence(issue.id, evidenceFile);
+        if (!uploadResult?.evidenceUrl) {
+          throw new Error('Image upload failed to generate valid evidence reference on server.');
+        }
+        finalEvidenceUrl = uploadResult.evidenceUrl;
+      }
+
       const updatedIssue = await api.issues.updateStatus(issue.id, {
         status: nextStatus,
         note: trimmedNote,
         author: officerName.trim() || user?.name || 'Municipal Officer',
         role: department.trim() || user?.department || 'Department of Public Works',
-        evidenceUrl: nextStatus === 'completed' ? evidenceUrl.trim() : null,
+        evidenceUrl: nextStatus === 'completed' ? finalEvidenceUrl : null,
       });
 
       safePlaySound('playStampThud');
@@ -208,21 +260,91 @@ export default function MunicipalProgressModal({ issue, isOpen, onClose, onSucce
 
           {/* Evidence photo if completed */}
           {nextStatus === 'completed' && (
-            <div className="p-3.5 rounded-2xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 space-y-2">
-              <div className="text-xs font-bold text-teal-900 dark:text-teal-200 flex items-center gap-1.5">
-                <Camera className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                <span>Completion Photographic Evidence (Required)</span>
+            <div className="p-3.5 rounded-2xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-bold text-teal-900 dark:text-teal-200 flex items-center gap-1.5">
+                  <Camera className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                  <span>Official Completion Evidence (Mandatory)</span>
+                </div>
+                <div className="flex items-center gap-1 bg-teal-100 dark:bg-teal-900/60 p-0.5 rounded-lg text-[10px] font-mono">
+                  <button
+                    type="button"
+                    onClick={() => setEvidenceMode('upload')}
+                    className={`px-2 py-0.5 rounded-md font-bold transition-all ${
+                      evidenceMode === 'upload' ? 'bg-teal-700 text-white shadow-2xs' : 'text-teal-800 dark:text-teal-300'
+                    }`}
+                  >
+                    Upload File
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEvidenceMode('url')}
+                    className={`px-2 py-0.5 rounded-md font-bold transition-all ${
+                      evidenceMode === 'url' ? 'bg-teal-700 text-white shadow-2xs' : 'text-teal-800 dark:text-teal-300'
+                    }`}
+                  >
+                    Image URL
+                  </button>
+                </div>
               </div>
-              <input
-                type="url"
-                required
-                value={evidenceUrl}
-                onChange={(e) => setEvidenceUrl(e.target.value)}
-                placeholder="https://images.unsplash.com/..."
-                className="w-full px-3 py-1.5 text-xs rounded-lg bg-white dark:bg-stone-900 border border-teal-300 dark:border-teal-700 text-stone-900 dark:text-stone-100 font-mono"
-              />
+
+              {evidenceMode === 'upload' ? (
+                <div className="space-y-2">
+                  {evidencePreview ? (
+                    <div className="relative aspect-video rounded-xl overflow-hidden border border-teal-300 dark:border-teal-700 bg-stone-900">
+                      <img
+                        src={evidencePreview}
+                        alt="Completion preview"
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEvidenceFile(null);
+                          setEvidencePreview(null);
+                        }}
+                        className="absolute top-2 right-2 p-1 rounded-full bg-black/70 hover:bg-black text-white text-xs"
+                        title="Remove photo"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                      <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/60 text-white text-[10px] font-mono">
+                        ✓ {evidenceFile?.name} ({(evidenceFile?.size / 1024).toFixed(0)} KB)
+                      </div>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-teal-300 dark:border-teal-700 hover:border-teal-500 bg-teal-50/50 dark:bg-teal-900/20 cursor-pointer text-center transition-colors">
+                      <Camera className="w-6 h-6 text-teal-600 dark:text-teal-400 mb-1" />
+                      <span className="text-xs font-bold text-teal-900 dark:text-teal-200">
+                        Choose / Take Completed Work Photo
+                      </span>
+                      <span className="text-[10px] text-teal-700 dark:text-teal-300">
+                        JPEG, PNG, WebP up to 5MB (Mobile camera or desktop)
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileChange}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <input
+                    type="url"
+                    required
+                    value={evidenceUrl}
+                    onChange={(e) => setEvidenceUrl(e.target.value)}
+                    placeholder="https://images.unsplash.com/..."
+                    className="w-full px-3 py-1.5 text-xs rounded-lg bg-white dark:bg-stone-900 border border-teal-300 dark:border-teal-700 text-stone-900 dark:text-stone-100 font-mono"
+                  />
+                </div>
+              )}
+
               <p className="text-[10px] text-teal-700 dark:text-teal-300 font-mono">
-                Citizens will visually inspect this evidence before certifying resolution.
+                * Citizens will visually inspect this evidence on their timeline to certify completion or reopen if needed.
               </p>
             </div>
           )}
